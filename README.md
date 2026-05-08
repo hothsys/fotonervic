@@ -1,8 +1,10 @@
 # Fotonervic
 
-A web app that recursively scans directories for corrupt, truncated, or damaged image and video files — and attempts to recover them. Also extracts EXIF metadata with thumbnail previews across an entire directory.
+*I hope you never have to use this. But if you do, I hope it helps.*
 
-Built for data recovery scenarios where hundreds or thousands of photos have been rescued from a failing drive but many are partially damaged. The scanner identifies every problem file, categorizes the damage, and offers one-click repair or salvage where possible.
+This web app recursively scans directories for corrupt, truncated, or damaged image files and video files. For images, it attempts recovery where possible. Also extracts EXIF metadata with thumbnail previews across an entire directory.
+
+Built for data recovery scenarios where hundreds or thousands of photos have been rescued from a failing drive but many are partially damaged. The scanner identifies every problem file, categorizes the damage, and offers one-click repair or salvage for support image formats.
 
 ## Features
 
