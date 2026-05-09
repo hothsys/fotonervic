@@ -1,4 +1,4 @@
-# Photo Integrity Scanner — Python dependencies
+# Python dependencies
 #
 # Required
 Pillow>=10.0.0
