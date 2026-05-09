@@ -1,4 +1,4 @@
-# Fotonervic
+# fotonerviC
 
 *I hope you never have to use this. But if you do, I hope it helps.*
 
