@@ -5,7 +5,7 @@ Pillow>=10.0.0
 
 # Optional but strongly recommended
 # Enables full RAW support: NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW
-rawpy>=0.18.0
+rawpy>=0.27.0
 
 # Optional — enables HEIC/HEIF support (iPhone photos)
 pillow-heif>=0.13.0
