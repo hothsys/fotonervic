@@ -1,7 +1,7 @@
 # Python dependencies
 #
 # Required
-Pillow>=12.2.0
+Pillow>=12.3.0
 
 # Optional but strongly recommended
 # Enables full RAW support: NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW
