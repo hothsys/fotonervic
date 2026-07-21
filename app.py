@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """
-Photo Integrity Scanner
 Recursively scans directories for corrupt or partial image files.
 Detects: truncated files, missing image data, corrupt headers,
 and files with EXIF metadata but no recoverable image content.
@@ -2327,7 +2326,7 @@ if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5900
     print()
     print('╔══════════════════════════════════════════════╗')
-    print('║       Photo Integrity Scanner                ║')
+    print('║                  Fotonervic                  ║')
     print(f'║  Open http://localhost:{port} in your browser  ║')
     print('╚══════════════════════════════════════════════╝')
     print()
