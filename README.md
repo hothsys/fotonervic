@@ -64,10 +64,6 @@ From the project folder:
 
 Add a port number to `start` or `restart` (e.g. `./server.sh start 8080`) to use a different port.
 
-### Renaming the app
-
-The app's name lives in one place, `APP_NAME` in [`app.conf`](app.conf). The server, page, and launchers all read it. After changing it, run `launcher/build-app.sh` to regenerate the macOS launchers (`<APP_NAME>.app` and `<APP_NAME>.command`); the old ones are removed.
-
 ### Windows
 
 From the project folder in Command Prompt or PowerShell:
