@@ -13,6 +13,7 @@ import struct
 import threading
 import csv
 import io
+import html
 import re
 import subprocess
 import webbrowser
@@ -50,13 +51,60 @@ from urllib.parse import urlparse, parse_qs
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def _read_app_config():
+    """Read KEY="value" lines from app.conf, which the shell scripts also source."""
+    cfg = {}
+    try:
+        with open(os.path.join(APP_DIR, 'app.conf')) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, val = line.split('=', 1)
+                cfg[key.strip()] = val.strip().strip('"\'')
+    except OSError:
+        pass
+    return cfg
+
+
+_APP_CONFIG = _read_app_config()
+APP_NAME  = _APP_CONFIG.get('APP_NAME') or os.path.basename(APP_DIR)
+APP_TITLE = _APP_CONFIG.get('APP_TITLE') or APP_NAME
+
 # ─── Global scan state ───────────────────────────────────────────────────────
 
+# Each scan gets its own cancel Event so that cancelling (or starting a new
+# scan) only affects that scan; a shared boolean would be reset by the next
+# scan before the old one noticed it.
 scan_state = {
     'running': False,
-    'cancelled': False,
+    'cancel': None,
     'results': [],
 }
+
+_job_lock = threading.Lock()
+
+def _start_job(state):
+    """Cancel any job still running for this state and register a new one."""
+    with _job_lock:
+        if state['cancel'] is not None:
+            state['cancel'].set()
+        cancel = threading.Event()
+        state['cancel']  = cancel
+        state['results'] = []
+        state['running'] = True
+    return cancel
+
+def _finish_job(state, cancel):
+    with _job_lock:
+        if state['cancel'] is cancel:
+            state['running'] = False
+
+def _cancel_job(state):
+    with _job_lock:
+        if state['cancel'] is not None:
+            state['cancel'].set()
 
 # ─── Supported formats ────────────────────────────────────────────────────────
 
@@ -93,7 +141,7 @@ SUPPORTED_EXTENSIONS = {
     '.bmp',
     # GIF
     '.gif',
-    # Video — MP4 / MOV / AVI / MPEG
+    # Video: MP4 / MOV / AVI / MPEG
     '.mp4', '.m4v', '.mov',
     '.avi',
     '.mpg', '.mpeg',
@@ -128,14 +176,14 @@ def check_jpeg(filepath: str):
         with open(filepath, 'rb') as f:
             soi = f.read(2)
             if soi != b'\xff\xd8':
-                return 'corrupt', 'Missing JPEG SOI marker — not a valid JPEG file'
+                return 'corrupt', 'Missing JPEG SOI marker; not a valid JPEG file'
 
             # Scan for APP1/EXIF segment
             header_chunk = f.read(min(2048, file_size - 2))
             has_exif = b'Exif\x00\x00' in header_chunk
             has_jfif = b'JFIF\x00' in header_chunk
 
-            # Check for SOS (Start of Scan) marker — presence means image data exists
+            # Check for SOS (Start of Scan) marker; its presence means image data exists
             f.seek(2)
             full_header = f.read(min(65536, file_size))
             has_sos = b'\xff\xda' in full_header
@@ -143,14 +191,14 @@ def check_jpeg(filepath: str):
         # Specific case: has EXIF but no image scan data at all
         if has_exif and not has_sos:
             return 'exif_only', \
-                'File contains EXIF/metadata but no image scan data — ' \
+                'File contains EXIF/metadata but no image scan data, so ' \
                 'image content was not recovered'
 
         if not has_sos:
             return 'partial', \
-                'No image scan data (SOS marker) found — image may be a bare header'
+                'No image scan data (SOS marker) found; image may be a bare header'
 
-        # Full Pillow decode — the definitive test.
+        # Full Pillow decode is the definitive test.
         # If .load() decompresses every pixel without error, the image
         # is complete regardless of whether an EOI marker is present.
         # (Many cameras/apps append large amounts of data after EOI.)
@@ -207,7 +255,7 @@ def check_png(filepath: str):
 
         if b'IEND' not in tail:
             return 'partial', \
-                'Missing PNG IEND chunk — file is truncated (image data incomplete)'
+                'Missing PNG IEND chunk, so the file is truncated (image data incomplete)'
 
         try:
             from PIL import Image
@@ -228,24 +276,159 @@ def check_png(filepath: str):
 
 # ─── HEIC / HEIF checker ──────────────────────────────────────────────────────
 
+# Coded image item types in a HEIF container (iPhones store a grid of 'hvc1' tiles)
+_HEIF_CODED_ITEMS = {b'hvc1', b'av01', b'avc1', b'jpeg', b'j2k1', b'unci'}
+
+
+def _iter_boxes(buf, start, end):
+    """Yield (type, payload_start, payload_end) for ISOBMFF boxes in buf[start:end]."""
+    pos = start
+    while pos + 8 <= end:
+        size, typ = struct.unpack('>I4s', buf[pos:pos + 8])
+        hlen = 8
+        if size == 1:
+            if pos + 16 > end:
+                return
+            size = struct.unpack('>Q', buf[pos + 8:pos + 16])[0]
+            hlen = 16
+        elif size == 0:
+            size = end - pos
+        if size < hlen:
+            return
+        yield typ, pos + hlen, min(pos + size, end)
+        pos += size
+
+
+def _parse_heif_structure(filepath: str):
+    """Walk a HEIF/HEIC container without decoding it.
+
+    Returns None if the file doesn't start with an 'ftyp' box, else a dict:
+      truncated_box  name of a top-level box that runs past end of file, or None
+      items          {item_id: item_type} from 'iinf'
+      extents        [(item_id, end_offset)] for item data stored in the file
+      has_transform  True if an 'irot'/'imir' property is present; libheif
+                     applies those itself when decoding
+    """
+    file_size = os.path.getsize(filepath)
+    meta = None
+    truncated_box = None
+    with open(filepath, 'rb') as f:
+        offset = 0
+        while offset + 8 <= file_size:
+            f.seek(offset)
+            size, typ = struct.unpack('>I4s', f.read(8))
+            hlen = 8
+            if size == 1:
+                size = struct.unpack('>Q', f.read(8))[0]
+                hlen = 16
+            elif size == 0:
+                size = file_size - offset
+            if offset == 0 and typ != b'ftyp':
+                return None
+            if size < hlen:
+                truncated_box = typ.decode('latin-1')
+                break
+            if typ == b'meta' and meta is None:
+                f.seek(offset + hlen)
+                meta = f.read(min(size, file_size - offset) - hlen)
+            if offset + size > file_size:
+                truncated_box = typ.decode('latin-1')
+                break
+            offset += size
+
+    result = {'truncated_box': truncated_box, 'items': {}, 'extents': [],
+              'has_transform': False}
+    if not meta or len(meta) < 4:
+        return result
+
+    def uint(buf, pos, nbytes):
+        return int.from_bytes(buf[pos:pos + nbytes], 'big') if nbytes else 0
+
+    try:
+        # 'meta' is a FullBox: 4 bytes of version/flags before its children
+        for typ, start, end in _iter_boxes(meta, 4, len(meta)):
+            if typ == b'iprp':
+                for t2, s2, e2 in _iter_boxes(meta, start, end):
+                    if t2 == b'ipco':
+                        for t3, _, _ in _iter_boxes(meta, s2, e2):
+                            if t3 in (b'irot', b'imir'):
+                                result['has_transform'] = True
+            elif typ == b'iinf':
+                version = meta[start]
+                first = start + (6 if version == 0 else 8)
+                for t2, s2, e2 in _iter_boxes(meta, first, end):
+                    if t2 != b'infe' or meta[s2] < 2:
+                        continue
+                    id_len = 2 if meta[s2] == 2 else 4
+                    item_id = uint(meta, s2 + 4, id_len)
+                    result['items'][item_id] = meta[s2 + 4 + id_len + 2:s2 + 4 + id_len + 6]
+            elif typ == b'iloc':
+                version = meta[start]
+                pos = start + 4
+                offset_size, length_size = meta[pos] >> 4, meta[pos] & 0x0F
+                base_offset_size = meta[pos + 1] >> 4
+                index_size = meta[pos + 1] & 0x0F if version in (1, 2) else 0
+                pos += 2
+                id_len = 4 if version == 2 else 2
+                item_count = uint(meta, pos, id_len)
+                pos += id_len
+                for _ in range(item_count):
+                    item_id = uint(meta, pos, id_len)
+                    pos += id_len
+                    method = 0
+                    if version in (1, 2):
+                        method = uint(meta, pos, 2) & 0x0F
+                        pos += 2
+                    pos += 2  # data_reference_index
+                    base = uint(meta, pos, base_offset_size)
+                    pos += base_offset_size
+                    extent_count = uint(meta, pos, 2)
+                    pos += 2
+                    for _ in range(extent_count):
+                        pos += index_size
+                        ext_off = uint(meta, pos, offset_size)
+                        pos += offset_size
+                        ext_len = uint(meta, pos, length_size)
+                        pos += length_size
+                        if method == 0:  # stored in the file (1 = inside meta, 2 = another item)
+                            result['extents'].append((item_id, base + ext_off + ext_len))
+    except (IndexError, struct.error):
+        pass  # header itself damaged; report whatever was parsed
+    return result
+
+
 def check_heic(filepath: str):
     try:
         file_size = os.path.getsize(filepath)
         if file_size == 0:
             return 'empty', 'File is empty (0 bytes)'
 
-        # Try pillow-heif first
+        # Structural check first. libheif decodes a grid image even when some
+        # tiles are missing (it fills them with solid color), so a successful
+        # decode alone doesn't prove the file is complete.
+        heif = _parse_heif_structure(filepath)
+        if heif is None:
+            return 'corrupt', 'No valid HEIF/HEIC container structure (missing ftyp box)'
+
+        cut_items = {item for item, end in heif['extents'] if end > file_size}
+        expected_end = max([end for _, end in heif['extents']] + [file_size])
+        pct = round((expected_end - file_size) / expected_end * 100, 3)
+        if cut_items:
+            coded = {i for i, t in heif['items'].items() if t in _HEIF_CODED_ITEMS}
+            cut_tiles = cut_items & coded
+            what = (f'{len(cut_tiles)} of {len(coded)} image tiles are incomplete or missing'
+                    if coded else f'{len(cut_items)} data items run past the end of the file')
+            return 'partial', f'HEIC file is truncated: {what} (~{pct}% of file corrupted)'
+        if heif['truncated_box']:
+            return 'partial', (f"HEIC file is truncated: '{heif['truncated_box']}' box "
+                               f"runs past the end of the file")
+
         try:
             from pillow_heif import register_heif_opener
             register_heif_opener()
-            from PIL import Image
-            img = Image.open(filepath)
-            img.load()
-            return 'ok', None
         except ImportError:
-            pass  # Fall through to plain PIL attempt
+            pass  # plain PIL may still have HEIF support
 
-        # Try plain PIL (works if system has HEIF support)
         try:
             from PIL import Image
             img = Image.open(filepath)
@@ -253,10 +436,10 @@ def check_heic(filepath: str):
             return 'ok', None
         except Exception as e:
             err_lower = str(e).lower()
-            if 'format' in err_lower or 'cannot identify' in err_lower:
+            if 'cannot identify' in err_lower:
                 return 'unsupported', \
-                    'HEIC/HEIF support unavailable — install pillow-heif ' \
-                    '(pip install pillow-heif). File structure not verified.'
+                    'HEIC/HEIF support unavailable. Install pillow-heif ' \
+                    '(pip install pillow-heif). Container structure looks intact.'
             if 'truncated' in err_lower:
                 return 'partial', f'Truncated HEIC file: {str(e)}'
             return 'corrupt', f'HEIC decode error: {str(e)}'
@@ -458,7 +641,7 @@ def _parse_tiff_structure(filepath: str) -> dict:
                         result['image_data_accessible'] = False
                         break
             elif result['has_image_data_tags']:
-                # Had offset tags but couldn't read the counts — ambiguous
+                # Had offset tags but couldn't read the counts, so the result is ambiguous
                 pass
 
     except Exception as e:
@@ -539,7 +722,7 @@ def _find_best_embedded_preview(filepath: str):
                 """Read the scalar value from a TIFF IFD entry,
                 respecting the data type (SHORT vs LONG)."""
                 dtype = struct.unpack(f'{endian}H', entry[2:4])[0]
-                if dtype == 3:  # SHORT — 2 bytes
+                if dtype == 3:  # SHORT: 2 bytes
                     return struct.unpack(f'{endian}H', entry[8:10])[0]
                 return struct.unpack(f'{endian}I', entry[8:12])[0]
 
@@ -683,20 +866,20 @@ def check_raw(filepath: str):
                         f'File too small to be valid {fmt_name} '
                         f'({file_size} bytes) and has no valid TIFF header')
                 return 'corrupt', (
-                    f'No valid TIFF/RAW header found — '
+                    f'No valid TIFF/RAW header found; '
                     f'file data appears to be completely corrupt')
 
             if tiff['has_exif'] and not tiff['has_image_data_tags']:
                 return 'exif_only', (
                     f'{fmt_name} file has valid TIFF structure and '
-                    f'EXIF/camera metadata but no image data references '
-                    f'— image content was not recovered')
+                    f'EXIF/camera metadata but no image data references, '
+                    f'so image content was not recovered')
 
             if tiff['has_image_data_tags'] and not tiff['image_data_accessible']:
                 return 'partial', (
                     f'{fmt_name} file has TIFF structure and image data '
                     f'references, but image data extends beyond end of '
-                    f'file — file is truncated')
+                    f'file, so the file is truncated')
 
         # ── Full decode via rawpy ────────────────────────────────────
         rawpy_stderr = ''
@@ -733,7 +916,7 @@ def check_raw(filepath: str):
             return 'ok', None
 
         except ImportError:
-            # rawpy not installed — use structural results if available
+            # rawpy not installed: use structural results if available
             if tiff and tiff['valid_header'] and tiff['has_image_data_tags'] \
                     and tiff['image_data_accessible']:
                 return 'ok', None
@@ -757,7 +940,7 @@ def check_raw(filepath: str):
             err = str(e)
             err_lower = err.lower()
 
-            # rawpy failed — check corruption severity and embedded
+            # rawpy failed: check corruption severity and embedded
             # JPEG previews.  Parse stderr for the corruption offset
             # so we can tell whether damage is minor (tail end) or
             # severe (early in the file).
@@ -773,7 +956,7 @@ def check_raw(filepath: str):
                         and file_size > 0
                         and corrupt_at / file_size > 0.95)
 
-            # Corruption percentage — how much of the file is damaged
+            # Corruption percentage: how much of the file is damaged
             corrupt_pct = None
             if corrupt_at is not None and file_size > 0:
                 corrupt_pct = round(
@@ -799,7 +982,7 @@ def check_raw(filepath: str):
                     if is_full_res and is_minor:
                         return 'partial', (
                             f'Minor RAW data corruption near end of '
-                            f'file{_pct_str()} — file is still usable '
+                            f'file{_pct_str()}; file is still usable '
                             f'with intact {pw}x{ph} embedded preview')
                     elif is_full_res:
                         return 'partial', (
@@ -809,12 +992,12 @@ def check_raw(filepath: str):
                     else:
                         return 'partial', (
                             f'RAW sensor data is damaged{_pct_str()} '
-                            f'— file only contains a small '
+                            f'and file only contains a small '
                             f'{pw}x{ph} preview thumbnail')
                 except Exception:
                     pass  # preview data also damaged
 
-            # No usable embedded preview — try plain PIL
+            # No usable embedded preview: try plain PIL
             try:
                 from PIL import Image
                 img = Image.open(filepath)
@@ -823,17 +1006,17 @@ def check_raw(filepath: str):
                 if w >= 2000 and h >= 1500 and is_minor:
                     return 'partial', (
                         f'Minor RAW data corruption near end of '
-                        f'file{_pct_str()} — file is still usable '
+                        f'file{_pct_str()}; file is still usable '
                         f'with intact {w}x{h} preview')
                 if w >= 2000 and h >= 1500:
                     return 'partial', (
                         f'RAW sensor data is damaged{_pct_str()} '
                         f'but a {w}x{h} preview is readable')
                 return 'partial', (
-                    f'RAW sensor data is damaged{_pct_str()} — '
+                    f'RAW sensor data is damaged{_pct_str()} and '
                     f'only a small {w}x{h} preview is readable')
             except Exception:
-                pass  # PIL also failed — continue to structural analysis
+                pass  # PIL also failed; continue to structural analysis
 
             # Use structural info to classify rawpy errors for NEF/ARW
             if tiff and tiff['valid_header']:
@@ -841,7 +1024,7 @@ def check_raw(filepath: str):
                 if tiff['has_exif'] and not tiff['has_image_data_tags']:
                     return 'exif_only', (
                         f'{fmt_name} file has EXIF/camera metadata but '
-                        f'libraw cannot decode image data — '
+                        f'libraw cannot decode image data, so '
                         f'image content was not recovered')
                 if not tiff['image_data_accessible']:
                     return 'partial', (
@@ -925,7 +1108,7 @@ def check_mp4(filepath: str):
                     ext = f.read(8)
                     if len(ext) < 8:
                         return 'partial', \
-                            'Truncated atom header — file cut off mid-atom'
+                            'Truncated atom header; file cut off mid-atom'
                     size = struct.unpack('>Q', ext)[0]
 
                 # size 0 means atom extends to EOF (valid for last atom)
@@ -933,7 +1116,7 @@ def check_mp4(filepath: str):
                     size = file_size - offset
 
                 if size < 8:
-                    # First atom invalid — not an MP4/MOV file
+                    # First atom invalid: not an MP4/MOV file
                     if atoms_checked == 0:
                         return 'corrupt', \
                             'No valid MP4/MOV container structure found'
@@ -945,7 +1128,7 @@ def check_mp4(filepath: str):
                         return 'corrupt', \
                             'No valid MP4/MOV container structure found'
 
-                # Unknown atom after essential atoms found — trailing garbage,
+                # Unknown atom after essential atoms found: trailing garbage,
                 # stop walking (cameras occasionally write junk after moov)
                 if atom_type not in _KNOWN_ATOMS and has_moov:
                     break
@@ -957,14 +1140,14 @@ def check_mp4(filepath: str):
                 elif atom_type == b'mdat':
                     has_mdat = True
 
-                # Check if atom extends past EOF — only flag essential atoms;
+                # Check if atom extends past EOF. Only flag essential atoms;
                 # garbage trailers with implausible sizes are silently ignored
                 if offset + size > file_size:
                     if atom_type not in _KNOWN_ATOMS:
                         break  # trailing junk, not a truncation
                     atom_name = atom_type.decode('ascii', errors='replace')
                     return 'partial', (
-                        f'File is truncated — {atom_name!r} atom declares '
+                        f'File is truncated: {atom_name!r} atom declares '
                         f'{size:,} bytes but only '
                         f'{file_size - offset:,} remain in file')
 
@@ -976,13 +1159,13 @@ def check_mp4(filepath: str):
 
         if not has_moov:
             return 'corrupt', (
-                'No moov atom (metadata/index) — file is unplayable. '
+                'No moov atom (metadata/index), so the file is unplayable. '
                 'The moov atom may have been at the end of the file '
                 'and lost to truncation')
 
         if has_moov and not has_mdat:
             return 'partial', (
-                'Has moov (metadata) but no mdat (media data) — '
+                'Has moov (metadata) but no mdat (media data); '
                 'video content is missing')
 
         return 'ok', None
@@ -1011,13 +1194,13 @@ def check_avi(filepath: str):
 
             # RIFF header + AVI type
             if header[0:4] != b'RIFF':
-                return 'corrupt', 'Missing RIFF header — not a valid AVI file'
+                return 'corrupt', 'Missing RIFF header; not a valid AVI file'
 
             riff_type = header[8:12]
             if riff_type not in (b'AVI ', b'AVIX'):
                 return 'corrupt', (
-                    f'RIFF type is {riff_type!r}, not AVI — '
-                    f'not a valid AVI file')
+                    f'RIFF type is {riff_type!r}, not AVI, so '
+                    f'this is not a valid AVI file')
 
             # Declared RIFF size (excludes the 8-byte RIFF header itself)
             riff_size = struct.unpack('<I', header[4:8])[0]
@@ -1034,7 +1217,7 @@ def check_avi(filepath: str):
 
             if not has_hdrl:
                 return 'corrupt', (
-                    'Missing AVI header list (hdrl) — '
+                    'Missing AVI header list (hdrl); '
                     'file structure is invalid')
 
             # Check truncation: file significantly smaller than declared
@@ -1046,13 +1229,13 @@ def check_avi(filepath: str):
                         f'{declared_size:,} bytes, ~{pct}% missing) '
                         f'and video data (movi) is missing')
                 return 'partial', (
-                    f'File is truncated — {file_size:,} of '
+                    f'File is truncated: {file_size:,} of '
                     f'{declared_size:,} declared bytes '
                     f'(~{pct}% of data missing)')
 
             if not has_movi:
                 return 'partial', (
-                    'Has AVI header but no video data chunk (movi) — '
+                    'Has AVI header but no video data chunk (movi); '
                     'video content is missing')
 
             return 'ok', None
@@ -1084,14 +1267,14 @@ def check_mpeg(filepath: str):
             # Check for MPEG pack start code (00 00 01 BA)
             header = f.read(4)
             if header != b'\x00\x00\x01\xba':
-                # Could be an MPEG elementary stream — check for any
+                # Could be an MPEG elementary stream; check for any
                 # valid start code
                 if header[:3] == b'\x00\x00\x01' \
                         and header[3] in _MPEG_START_CODES:
                     pass  # valid MPEG start code, continue
                 else:
                     return 'corrupt', (
-                        'No MPEG start code found — '
+                        'No MPEG start code found; '
                         'not a valid MPEG file')
 
             # Scan first 64 KB for valid start codes to confirm
@@ -1114,7 +1297,7 @@ def check_mpeg(filepath: str):
 
             if start_code_count < 2:
                 return 'corrupt', (
-                    'Too few valid MPEG start codes — '
+                    'Too few valid MPEG start codes; '
                     'file data appears corrupt')
 
             # Check for MPEG program end code (00 00 01 B9) at end
@@ -1124,8 +1307,8 @@ def check_mpeg(filepath: str):
 
             if not has_end_code:
                 return 'partial', (
-                    'Missing MPEG program end code — '
-                    'file is likely truncated')
+                    'Missing MPEG program end code, so '
+                    'the file is likely truncated')
 
             return 'ok', None
 
@@ -1170,7 +1353,7 @@ def check_image(filepath: str):
 
 WORKER_THREADS = 4
 
-def scan_directory_gen(root_dir: str):
+def scan_directory_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 
     if not root.exists():
@@ -1184,6 +1367,9 @@ def scan_directory_gen(root_dir: str):
     yield {'type': 'status', 'message': 'Counting image files…'}
     all_files = []
     for dp, dirs, files in os.walk(root, followlinks=False):
+        if cancel.is_set():
+            yield {'type': 'cancelled', 'scanned': 0, 'issues': 0}
+            return
         dirs.sort()
         for f in sorted(files):
             if Path(f).suffix.lower() in SUPPORTED_EXTENSIONS:
@@ -1210,7 +1396,7 @@ def scan_directory_gen(root_dir: str):
     # Process files in batches using a thread pool
     batch_size = WORKER_THREADS * 4
     for batch_start in range(0, total, batch_size):
-        if scan_state['cancelled']:
+        if cancel.is_set():
             yield {'type': 'cancelled', 'scanned': scanned, 'issues': issues}
             return
 
@@ -1223,7 +1409,7 @@ def scan_directory_gen(root_dir: str):
             }
 
             for future in as_completed(futures):
-                if scan_state['cancelled']:
+                if cancel.is_set():
                     executor.shutdown(wait=False, cancel_futures=True)
                     yield {'type': 'cancelled', 'scanned': scanned, 'issues': issues}
                     return
@@ -1374,7 +1560,7 @@ def _extract_pillow_exif(img):
         result['exif_width']  = int(w) if w else None
         result['exif_height'] = int(h) if h else None
 
-        # GPS — read sub-IFD (tag 0x8825 = 34853)
+        # GPS: read sub-IFD (tag 0x8825 = 34853)
         result['gps_lat'] = None
         result['gps_lng'] = None
         try:
@@ -1392,6 +1578,46 @@ def _extract_pillow_exif(img):
     except Exception:
         pass
     return result
+
+
+# EXIF Orientation tag (0x0112). Values 5-8 mean the stored pixels are rotated
+# 90 degrees, so width and height swap when displayed.
+_TAG_ORIENTATION = 0x0112
+
+# LibRaw's sizes.flip uses its own codes; map them to EXIF Orientation values
+_RAW_FLIP_TO_ORIENTATION = {3: 3, 5: 8, 6: 6}
+
+
+def _apply_orientation(img, orientation):
+    """Rotate/flip img so it displays upright for the given EXIF Orientation."""
+    from PIL import Image
+    method = {
+        2: Image.Transpose.FLIP_LEFT_RIGHT,
+        3: Image.Transpose.ROTATE_180,
+        4: Image.Transpose.FLIP_TOP_BOTTOM,
+        5: Image.Transpose.TRANSPOSE,
+        6: Image.Transpose.ROTATE_270,
+        7: Image.Transpose.TRANSVERSE,
+        8: Image.Transpose.ROTATE_90,
+    }.get(orientation)
+    return img.transpose(method) if method is not None else img
+
+
+def _image_orientation(img, filepath: str):
+    """EXIF Orientation for an opened image, accounting for pillow-heif.
+
+    pillow-heif resets the EXIF tag to 1 (moving the real value to
+    info['original_orientation']) on the assumption that libheif already
+    rotated the pixels. libheif only does that when the file has an
+    'irot'/'imir' property; many HEICs (e.g. Lightroom exports) carry their
+    rotation only in EXIF, so use the original value for those.
+    """
+    orientation = img.getexif().get(_TAG_ORIENTATION)
+    if orientation in (None, 1) and img.info.get('original_orientation') not in (None, 1):
+        heif = _parse_heif_structure(filepath)
+        if heif is not None and not heif['has_transform']:
+            orientation = img.info['original_orientation']
+    return orientation
 
 
 def extract_exif(filepath: str) -> dict:
@@ -1427,6 +1653,8 @@ def extract_exif(filepath: str) -> dict:
                 import rawpy
                 with rawpy.imread(filepath) as raw:
                     h, w = raw.raw_image.shape[:2]
+                    if raw.sizes.flip in (5, 6):  # portrait: rotated 90 degrees
+                        w, h = h, w
                     result['width']  = w
                     result['height'] = h
             except Exception:
@@ -1447,6 +1675,8 @@ def extract_exif(filepath: str) -> dict:
         try:
             img = Image.open(filepath)
             img_w, img_h = img.size
+            if _image_orientation(img, filepath) in (5, 6, 7, 8):
+                img_w, img_h = img_h, img_w  # report as displayed, not as stored
             exif_data = _extract_pillow_exif(img)
             result.update(exif_data)
             # Prefer actual image dimensions over EXIF-reported ones
@@ -1465,12 +1695,14 @@ def extract_exif(filepath: str) -> dict:
 
 # ─── EXIF directory scanner (generator) ───────────────────────────────────────
 
-exif_state = {'running': False, 'cancelled': False, 'results': []}
+exif_state = {'running': False, 'cancel': None, 'results': []}
 
-# Thumbnail cache — OrderedDict used as simple LRU (max 1000 entries)
+# Thumbnail cache: OrderedDict used as simple LRU (max 1000 entries)
 from collections import OrderedDict
 _thumbnail_cache: OrderedDict = OrderedDict()
 _THUMBNAIL_CACHE_MAX = 1000
+# Requests run on several threads, and /api/clear-cache empties the cache
+_thumbnail_lock = threading.Lock()
 _THUMBNAIL_SIZE = 300  # max px on either axis
 
 
@@ -1481,6 +1713,7 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
     ext = Path(filepath).suffix.lower()
     try:
         img = None
+        orientation = None
 
         if ext in VIDEO_EXTS:
             return None  # caller renders a video-icon placeholder
@@ -1501,9 +1734,15 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
                         import rawpy as _rp
                         if thumb.format == _rp.ThumbFormat.JPEG:
                             img = Image.open(io.BytesIO(thumb.data))
+                            orientation = img.getexif().get(_TAG_ORIENTATION)
                         else:
                             img = Image.fromarray(thumb.data)
+                        # Embedded previews are usually stored unrotated, with
+                        # the camera's orientation recorded only in the RAW
+                        if orientation in (None, 1):
+                            orientation = _RAW_FLIP_TO_ORIENTATION.get(raw.sizes.flip)
                     except Exception:
+                        # postprocess() applies the RAW's orientation itself
                         rgb = raw.postprocess(
                             use_camera_wb=True, half_size=True, output_bps=8)
                         img = Image.fromarray(rgb)
@@ -1512,8 +1751,12 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
 
         if img is None:
             img = Image.open(filepath)
+            orientation = _image_orientation(img, filepath)
 
+        # Shrink first (fast JPEG draft decode), then rotate. The saved
+        # thumbnail carries no EXIF, so the browser can't rotate it for us.
         img.thumbnail((_THUMBNAIL_SIZE, _THUMBNAIL_SIZE), Image.LANCZOS)
+        img = _apply_orientation(img, orientation)
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
 
@@ -1528,7 +1771,7 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
         ImageFile.LOAD_TRUNCATED_IMAGES = False
 
 
-def exif_scan_gen(root_dir: str):
+def exif_scan_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 
     if not root.exists():
@@ -1541,6 +1784,9 @@ def exif_scan_gen(root_dir: str):
     yield {'type': 'status', 'message': 'Counting files…'}
     all_files = []
     for dp, dirs, files in os.walk(root, followlinks=False):
+        if cancel.is_set():
+            yield {'type': 'cancelled', 'scanned': 0, 'issues': 0}
+            return
         dirs.sort()
         for f in sorted(files):
             if Path(f).suffix.lower() in SUPPORTED_EXTENSIONS:
@@ -1564,7 +1810,7 @@ def exif_scan_gen(root_dir: str):
 
     batch_size = WORKER_THREADS * 4
     for batch_start in range(0, total, batch_size):
-        if exif_state['cancelled']:
+        if cancel.is_set():
             yield {'type': 'cancelled', 'scanned': scanned}
             return
 
@@ -1577,7 +1823,7 @@ def exif_scan_gen(root_dir: str):
             }
 
             for future in as_completed(futures):
-                if exif_state['cancelled']:
+                if cancel.is_set():
                     executor.shutdown(wait=False, cancel_futures=True)
                     yield {'type': 'cancelled', 'scanned': scanned}
                     return
@@ -1604,7 +1850,6 @@ def exif_scan_gen(root_dir: str):
                     'total':     total,
                     **exif,
                 }
-                exif_state['results'].append(event)
                 yield event
 
     elapsed = time.time() - start
@@ -1617,6 +1862,14 @@ class ScannerHandler(SimpleHTTPRequestHandler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=APP_DIR, **kwargs)
+
+    def end_headers(self):
+        # Without this, browsers heuristically cache index.html/js/css (they
+        # only get Last-Modified) and keep running stale code after an update.
+        # no-cache still allows cheap 304 revalidation.
+        if not self.path.startswith('/api/'):
+            self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
 
     def _send_json(self, data, status=200):
         body = json.dumps(data, default=str).encode()
@@ -1669,6 +1922,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
                 self._handle_exif_scan()
             elif path == '/api/thumbnail':
                 self._handle_thumbnail()
+            elif path in ('/', '/index.html'):
+                self._handle_index()
             else:
                 super().do_GET()
         except (ConnectionResetError, BrokenPipeError):
@@ -1691,6 +1946,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
                 self._handle_repair_jpeg()
             elif path == '/api/salvage-image':
                 self._handle_salvage_image()
+            elif path == '/api/clear-cache':
+                self._handle_clear_cache()
             else:
                 self.send_error(404)
         except (ConnectionResetError, BrokenPipeError):
@@ -1698,15 +1955,27 @@ class ScannerHandler(SimpleHTTPRequestHandler):
 
     # ── Handler methods ──
 
+    def _handle_index(self):
+        """Serve index.html with {{APP_NAME}} / {{APP_TITLE}} filled in from app.conf."""
+        with open(os.path.join(APP_DIR, 'index.html'), encoding='utf-8') as f:
+            body = (f.read()
+                    .replace('{{APP_NAME}}', html.escape(APP_NAME))
+                    .replace('{{APP_TITLE}}', html.escape(APP_TITLE))
+                    .encode())
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _handle_scan(self):
         params = self._query_params()
         root_dir = params.get('dir', [''])[0].strip()
         if not root_dir:
             return self._send_json({'error': 'No directory specified'}, 400)
 
-        scan_state['cancelled'] = False
-        scan_state['running']   = True
-        scan_state['results']   = []
+        cancel  = _start_job(scan_state)
+        results = scan_state['results']
 
         self.send_response(200)
         self.send_header('Content-Type', 'text/event-stream')
@@ -1716,23 +1985,23 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
         try:
-            for event in scan_directory_gen(root_dir):
+            for event in scan_directory_gen(root_dir, cancel):
                 if event.get('type') == 'issue':
-                    scan_state['results'].append(event)
+                    results.append(event)
                 line = f"data: {json.dumps(event)}\n\n"
                 self.wfile.write(line.encode())
                 self.wfile.flush()
         except (ConnectionResetError, BrokenPipeError):
             pass
         finally:
-            scan_state['running'] = False
+            _finish_job(scan_state, cancel)
 
     def _handle_cancel(self):
-        scan_state['cancelled'] = True
+        _cancel_job(scan_state)
         self._send_json({'ok': True})
 
     def _handle_exif_cancel(self):
-        exif_state['cancelled'] = True
+        _cancel_job(exif_state)
         self._send_json({'ok': True})
 
     def _handle_thumbnail(self):
@@ -1743,18 +2012,20 @@ class ScannerHandler(SimpleHTTPRequestHandler):
             self.send_error(404)
             return
 
-        if filepath in _thumbnail_cache:
-            _thumbnail_cache.move_to_end(filepath)
-            data = _thumbnail_cache[filepath]
-        else:
-            data = _generate_thumbnail(filepath)
+        with _thumbnail_lock:
+            data = _thumbnail_cache.get(filepath)
+            if data is not None:
+                _thumbnail_cache.move_to_end(filepath)
+        if data is None:
+            data = _generate_thumbnail(filepath)  # slow; done outside the lock
             if data is None:
                 self.send_error(404)
                 return
-            _thumbnail_cache[filepath] = data
-            _thumbnail_cache.move_to_end(filepath)
-            if len(_thumbnail_cache) > _THUMBNAIL_CACHE_MAX:
-                _thumbnail_cache.popitem(last=False)
+            with _thumbnail_lock:
+                _thumbnail_cache[filepath] = data
+                _thumbnail_cache.move_to_end(filepath)
+                if len(_thumbnail_cache) > _THUMBNAIL_CACHE_MAX:
+                    _thumbnail_cache.popitem(last=False)
 
         self.send_response(200)
         self.send_header('Content-Type', 'image/jpeg')
@@ -1763,15 +2034,29 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_clear_cache(self):
+        """Empty the server's thumbnail cache and tell the browser to drop its
+        HTTP cache for this origin. Saved scans (IndexedDB) and localStorage
+        are untouched: Clear-Site-Data "cache" covers only the HTTP cache."""
+        with _thumbnail_lock:
+            cleared = len(_thumbnail_cache)
+            _thumbnail_cache.clear()
+        body = json.dumps({'ok': True, 'thumbnails_cleared': cleared}).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Clear-Site-Data', '"cache"')
+        self.end_headers()
+        self.wfile.write(body)
+
     def _handle_exif_scan(self):
         params = self._query_params()
         root_dir = params.get('dir', [''])[0].strip()
         if not root_dir:
             return self._send_json({'error': 'No directory specified'}, 400)
 
-        exif_state['cancelled'] = False
-        exif_state['running']   = True
-        exif_state['results']   = []
+        cancel  = _start_job(exif_state)
+        results = exif_state['results']
 
         self.send_response(200)
         self.send_header('Content-Type', 'text/event-stream')
@@ -1781,14 +2066,16 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
         try:
-            for event in exif_scan_gen(root_dir):
+            for event in exif_scan_gen(root_dir, cancel):
+                if event.get('type') == 'exif_result':
+                    results.append(event)
                 line = f"data: {json.dumps(event, default=str)}\n\n"
                 self.wfile.write(line.encode())
                 self.wfile.flush()
         except (ConnectionResetError, BrokenPipeError):
             pass
         finally:
-            exif_state['running'] = False
+            _finish_job(exif_state, cancel)
 
     def _handle_export(self):
         results = scan_state.get('results', [])
@@ -1907,7 +2194,7 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         if ext not in JPEG_EXTS:
             return self._send_json({'error': 'Not a JPEG file'}, 400)
 
-        # Decode the truncated image — Pillow can recover all pixel data
+        # Decode the truncated image; Pillow can recover all pixel data
         # even when the compressed stream is incomplete
         try:
             from PIL import Image, ImageFile
@@ -2158,7 +2445,7 @@ def salvage_jpeg(filepath: str):
                 break
 
     if own_tables_offset > 0:
-        # File has its own tables — just prepend SOI and decode
+        # File has its own tables: just prepend SOI and decode
         reconstructed = b'\xFF\xD8' + damaged[own_tables_offset:]
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         try:
@@ -2299,7 +2586,7 @@ def salvage_jpeg(filepath: str):
             block = decoded.crop((sx, sy, sx + mcu_w, sy + mcu_h))
             output.paste(block, (dx, dy))
 
-        # Gray out garbled MCUs (before first RST — bad DC predictor)
+        # Gray out garbled MCUs (before first RST, bad DC predictor)
         garbled_count = 6
         for d_seq in range(garbled_count):
             orig_seq = (P + d_seq) % total_mcus
@@ -2326,7 +2613,7 @@ if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5900
     print()
     print('╔══════════════════════════════════════════════╗')
-    print('║                  Fotonervic                  ║')
+    print(f'║{APP_TITLE.center(46)}║')
     print(f'║  Open http://localhost:{port} in your browser  ║')
     print('╚══════════════════════════════════════════════╝')
     print()

@@ -55,6 +55,7 @@ header p {
   margin-top: 1px;
 }
 header .spacer { flex: 1; }
+header .header-btn { font-size: 11px; padding: 3px 10px; margin-right: 8px; }
 header .badge {
   font-family: var(--mono);
   font-size: 11px;
@@ -105,6 +106,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
   border-color: var(--amber);
 }
 .input-row input::placeholder { color: var(--text3); }
+.input-row input:disabled { opacity: .5; cursor: not-allowed; }
 button {
   cursor: pointer;
   font-family: var(--sans);
@@ -686,6 +688,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
   cursor: pointer;
 }
 .prev-scans-row select:focus { border-color: var(--amber); }
+.prev-scans-row select:disabled { opacity: .5; cursor: not-allowed; }
 .prev-scans-row select option { background: var(--surface); }
 
 /* ── Mount status indicator ── */

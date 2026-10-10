@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fotonervic</title>
+<title>{{APP_TITLE}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Josefin+Sans:wght@300;400;600&display=swap" rel="stylesheet">
@@ -37,10 +37,12 @@
       <path id="fractured-black-rectangle" d="M1497.917,814.99l-228.401,-2.849l228.401,2.849l0,1.834l16.667,16.696l0,4.174l16.667,16.696l0,4.174l20.833,20.87l0,4.174l25,25.044l0,4.174l18.75,18.783l4.167,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l4.167,4.174l8.333,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l4.167,4.174l4.167,0l2.083,2.087l0,8.348l-4.167,4.174l0,12.522l-4.167,4.174l0,8.348l-4.167,4.174l0,12.522l-4.167,4.174l0,8.348l-4.167,4.174l6.25,6.261l25,0l4.167,4.174l29.167,0l4.167,4.174l16.667,0l4.167,4.174l25,0l4.167,4.174l20.833,0l14.583,14.609l0,4.174l16.667,16.696l0,4.174l12.5,12.522l0,4.174l20.833,20.87l0,4.174l12.5,12.522l0,4.174l6.25,6.261l12.5,0l4.167,4.174l29.167,0l4.167,4.174l29.167,0l4.167,4.174l29.167,0l4.167,4.174l29.167,0l4.167,4.174l25,0l35.417,35.479l0,8.348l-4.167,4.174l0,25.044l-4.167,4.174l0,20.87l-4.167,4.174l0,20.87l-4.167,4.174l0,16.696l-4.167,4.174l6.25,6.261l4.167,-4.174l12.5,0l4.167,-4.174l12.5,0l4.167,-4.174l16.667,0l4.167,-4.174l12.5,0l4.167,-4.174l16.667,0l10.417,10.435l0,4.174l8.333,8.348l0,4.174l12.5,12.522l0,1740.548l-2.083,2.087l-1850,0l-2.083,-2.087l0,-2291.513l2.083,-2.087l983.333,0l37.5,-37.566l4.167,0l45.833,-45.914l4.167,0l14.583,14.609l0,4.174l20.833,20.87l0,4.174l16.667,16.696l0,4.174l20.833,20.87l0,2.34Z"/>
   </svg>
   <div>
-    <h1>Fotonervic</h1>
+    <h1>{{APP_TITLE}}</h1>
     <p>Detect partial &amp; corrupt images &amp; videos</p>
   </div>
   <div class="spacer"></div>
+  <button class="btn-outline header-btn" id="clear-cache-btn" onclick="clearCache()"
+          title="Clear cached thumbnails in the browser and server. Saved scans are kept.">Clear Cache</button>
   <div class="badge" id="lib-status">checking libraries…</div>
 </header>
 
@@ -53,16 +55,16 @@
       <input type="text" id="dir-input"
              placeholder="/volume1/photos  or  /Volumes/NAS/photos  or  C:\Photos"
              autocomplete="off" spellcheck="false">
-      <button class="btn-outline" onclick="openBrowse()">Browse</button>
+      <button class="btn-outline" id="browse-btn" onclick="openBrowse()">Browse</button>
       <button class="btn-primary" id="scan-btn" onclick="startScan()">Scan Directory</button>
       <button class="btn-outline" id="exif-btn" onclick="startExifScan()">Exif Info</button>
-      <button class="btn-danger" id="cancel-btn" onclick="cancelScan()" disabled>Cancel</button>
+      <button class="btn-danger" id="cancel-btn" onclick="cancelActive()" disabled>Cancel</button>
     </div>
     <div id="mount-status" class="mount-status" style="display:none"></div>
     <div id="prev-scans-row" class="prev-scans-row" style="display:none">
       <span class="prev-scans-label">Previous scans</span>
       <select id="prev-scans-select" onchange="loadSelectedScan(this)"></select>
-      <button class="btn-outline" style="padding:5px 12px;font-size:12px" onclick="clearAllScans()">Clear all</button>
+      <button class="btn-outline" id="clear-scans-btn" style="padding:5px 12px;font-size:12px" onclick="clearAllScans()">Clear all</button>
     </div>
   </div>
 

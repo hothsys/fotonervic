@@ -129,7 +129,7 @@ function fetchBrowse(url, retriesLeft) {
       list.innerHTML = '<div class="browse-empty">Retrying\u2026</div>';
       setTimeout(function() { fetchBrowse(url, retriesLeft - 1); }, 500);
     } else {
-      list.innerHTML = '<div class="browse-empty" style="color:var(--red)">Cannot connect to server \u2014 try closing and re-opening the browser</div>';
+      list.innerHTML = '<div class="browse-empty" style="color:var(--red)">Cannot connect to server. Try closing and re-opening the browser.</div>';
     }
   };
   xhr.send();
@@ -407,13 +407,10 @@ function startScan() {
   document.getElementById('s-unsupported').textContent = '0';
   document.getElementById('s-other').textContent       = '0';
   document.getElementById('s-scanned').textContent     = '0';
-  document.getElementById('summary-bar').style.display = 'none';
-  document.getElementById('export-bar').style.display  = 'none';
-  document.getElementById('results-section').style.display = 'none';
-  document.getElementById('empty-results').style.display   = 'none';
+  hideScanResults();
+  hideExifResults();
 
-  document.getElementById('scan-btn').disabled   = true;
-  document.getElementById('cancel-btn').disabled = false;
+  setBusy('scan');
   document.getElementById('progress-section').style.display = 'block';
   document.getElementById('p-bar').style.width   = '0%';
   document.getElementById('p-scanned').textContent = '0';
@@ -435,6 +432,45 @@ function startScan() {
   eventSource.onerror = () => {
     scanDone();
   };
+}
+
+// Scan results and EXIF results share the page; starting one hides the other's
+// output so stale panes (e.g. "No results") don't linger above the new results.
+function hideScanResults() {
+  ['summary-bar', 'export-bar', 'results-section', 'empty-results']
+    .forEach(id => { document.getElementById(id).style.display = 'none'; });
+}
+
+function hideExifResults() {
+  document.getElementById('exif-section').style.display = 'none';
+}
+
+// ── Busy lock ────────────────────────────────────────────────────────────────
+// While a scan or EXIF scan runs, every button except Cancel is disabled (plus
+// the path input and previous-scans dropdown), so nothing can start overlapping
+// work or change the directory/results out from under the running scan.
+let busyMode = null;  // null | 'scan' | 'exif'
+
+const LOCKED_CONTROLS = '#scan-btn, #browse-btn, #exif-btn, #dir-input, '
+  + '#prev-scans-select, #clear-scans-btn, button:not(.btn-danger)';
+
+function setBusy(mode) {
+  busyMode = mode;
+  document.querySelectorAll(LOCKED_CONTROLS)
+    .forEach(el => { el.disabled = mode !== null; });
+  // Top Cancel stops whichever scan is running; the EXIF panel has its own too
+  document.getElementById('cancel-btn').disabled      = mode === null;
+  document.getElementById('exif-cancel-btn').disabled = mode !== 'exif';
+}
+
+// For result-row buttons rendered while a scan is still running
+function busyAttr() {
+  return busyMode ? ' disabled' : '';
+}
+
+function cancelActive() {
+  if (busyMode === 'exif') cancelExifScan();
+  else cancelScan();
 }
 
 function handleEvent(ev) {
@@ -472,7 +508,7 @@ function handleEvent(ev) {
       document.getElementById('p-bar').style.width = '100%';
       document.getElementById('p-current').textContent =
         ev.type === 'complete'
-          ? `\u2713 Done \u2014 scanned ${(ev.scanned||0).toLocaleString()} files in ${ev.elapsed}s`
+          ? `\u2713 Done: scanned ${(ev.scanned||0).toLocaleString()} files in ${ev.elapsed}s`
           : `Cancelled after ${(ev.scanned||0).toLocaleString()} files`;
       document.getElementById('p-current').classList.remove('scanning-pulse');
       document.getElementById('s-scanned').textContent = (ev.scanned||0).toLocaleString();
@@ -545,14 +581,14 @@ function appendIssueRow(ev) {
 
   const pctStr = ev.corrupt_pct != null ? ev.corrupt_pct + '%' : '';
   const previewBtn = RAW_EXTS.has(ev.ext)
-    ? `<button class="export-preview-btn" data-extract-preview="${escHtml(ev.filepath)}">Export Preview</button>`
+    ? `<button class="export-preview-btn"${busyAttr()} data-extract-preview="${escHtml(ev.filepath)}">Export Preview</button>`
     : '';
   const repairBtn = (JPEG_EXTS.has(ev.ext) && ev.status === 'partial')
-    ? `<button class="repair-jpeg-btn" data-repair-jpeg="${escHtml(ev.filepath)}">Repair JPG</button>`
+    ? `<button class="repair-jpeg-btn"${busyAttr()} data-repair-jpeg="${escHtml(ev.filepath)}">Repair JPG</button>`
     : '';
   const salvageBtn = (JPEG_EXTS.has(ev.ext) && ev.status === 'corrupt'
       && (ev.reason || '').includes('Missing JPEG SOI marker'))
-    ? `<button class="salvage-image-btn" data-salvage-image="${escHtml(ev.filepath)}">Salvage Image</button>`
+    ? `<button class="salvage-image-btn"${busyAttr()} data-salvage-image="${escHtml(ev.filepath)}">Salvage Image</button>`
     : '';
 
   const row = document.createElement('div');
@@ -564,7 +600,7 @@ function appendIssueRow(ev) {
       <a class="issue-filename" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
       <div class="issue-reason">${escHtml(ev.reason || '')}</div>
     </div>
-    <button class="copy-path-btn" data-copy="${escHtml(ev.filepath)}" title="Copy path: ${escHtml(ev.filepath)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+    <button class="copy-path-btn"${busyAttr()} data-copy="${escHtml(ev.filepath)}" title="Copy path: ${escHtml(ev.filepath)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
     ${previewBtn}
     ${repairBtn}
     ${salvageBtn}
@@ -598,8 +634,7 @@ function updateSummary() {
 
 function scanDone(scanned, issues) {
   if (eventSource) { eventSource.close(); eventSource = null; }
-  document.getElementById('scan-btn').disabled   = false;
-  document.getElementById('cancel-btn').disabled = true;
+  setBusy(null);
   document.getElementById('results-section').style.display = 'block';
 
   const hasIssues = Object.keys(folderData).length > 0;
@@ -615,11 +650,12 @@ function scanDone(scanned, issues) {
   applyFilter();
 }
 
+// Keep the stream open after cancelling: the server replies with a
+// 'cancelled' event, and handleEvent() then shows and saves partial results.
 function cancelScan() {
-  fetch('/api/cancel', { method: 'POST' });
-  if (eventSource) { eventSource.close(); eventSource = null; }
-  document.getElementById('scan-btn').disabled   = false;
   document.getElementById('cancel-btn').disabled = true;
+  document.getElementById('p-current').textContent = 'Cancelling\u2026';
+  fetch('/api/cancel', { method: 'POST' }).catch(() => scanDone());
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────
@@ -656,14 +692,14 @@ function applyFilter() {
       const size = ev.file_size > 0 ? formatSize(ev.file_size) : '0 B';
       const pctStr = ev.corrupt_pct != null ? ev.corrupt_pct + '%' : '';
       const previewBtn = RAW_EXTS.has(ev.ext)
-        ? `<button class="export-preview-btn" data-extract-preview="${escHtml(ev.filepath)}">Export Preview</button>`
+        ? `<button class="export-preview-btn"${busyAttr()} data-extract-preview="${escHtml(ev.filepath)}">Export Preview</button>`
         : '';
       const repairBtn = (JPEG_EXTS.has(ev.ext) && ev.status === 'partial')
-        ? `<button class="repair-jpeg-btn" data-repair-jpeg="${escHtml(ev.filepath)}">Repair JPG</button>`
+        ? `<button class="repair-jpeg-btn"${busyAttr()} data-repair-jpeg="${escHtml(ev.filepath)}">Repair JPG</button>`
         : '';
       const salvageBtn = (JPEG_EXTS.has(ev.ext) && ev.status === 'corrupt'
           && (ev.reason || '').includes('Missing JPEG SOI marker'))
-        ? `<button class="salvage-image-btn" data-salvage-image="${escHtml(ev.filepath)}">Salvage Image</button>`
+        ? `<button class="salvage-image-btn"${busyAttr()} data-salvage-image="${escHtml(ev.filepath)}">Salvage Image</button>`
         : '';
       const row = document.createElement('div');
       row.className = 'issue-row';
@@ -674,7 +710,7 @@ function applyFilter() {
           <a class="issue-filename" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
           <div class="issue-reason">${escHtml(ev.reason || '')}</div>
         </div>
-        <button class="copy-path-btn" data-copy="${escHtml(ev.filepath)}" title="Copy path: ${escHtml(ev.filepath)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+        <button class="copy-path-btn"${busyAttr()} data-copy="${escHtml(ev.filepath)}" title="Copy path: ${escHtml(ev.filepath)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
         ${previewBtn}
         ${repairBtn}
         ${salvageBtn}
@@ -760,9 +796,15 @@ function escHtml(s) {
 }
 
 // ── Session persistence (IndexedDB) ──────────────────────────────────────────
-const DB_NAME  = 'fotonervic';
+// Deliberately not the app's display name (app.conf APP_NAME), so renaming the
+// app doesn't strand saved scans in a database the page no longer opens
+const DB_NAME  = 'scan-history';
 const DB_STORE = 'scan';
 const MAX_SCANS = 10;
+// Databases used by earlier versions, which were named after the app. Saved
+// scans are moved out of them once on startup (migrateLegacyDB), then they
+// are deleted.
+const LEGACY_DB_NAMES = ['fotonervic', 'FotoNerveShatter'];
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -779,6 +821,35 @@ function openDB() {
     req.onsuccess = e => resolve(e.target.result);
     req.onerror   = e => reject(e.target.error);
   });
+}
+
+async function migrateLegacyDB() {
+  // databases() lets us check without open() silently creating an empty DB
+  if (!indexedDB.databases) return;
+  let names = [];
+  try { names = (await indexedDB.databases()).map(d => d.name); } catch(e) { return; }
+  for (const legacy of LEGACY_DB_NAMES) {
+    if (names.includes(legacy)) await migrateOneDB(legacy);
+  }
+}
+
+async function migrateOneDB(legacyName) {
+  try {
+    const old = await idbReq(indexedDB.open(legacyName));
+    let keys = [], vals = [];
+    if (old.objectStoreNames.contains(DB_STORE)) {
+      const store = old.transaction(DB_STORE, 'readonly').objectStore(DB_STORE);
+      [keys, vals] = await Promise.all([idbReq(store.getAllKeys()), idbReq(store.getAll())]);
+    }
+    old.close();
+
+    if (keys.length) {
+      const db = await openDB();
+      const store = db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE);
+      await Promise.all(keys.map((k, i) => idbReq(store.put(vals[i], k))));
+    }
+    indexedDB.deleteDatabase(legacyName);
+  } catch(e) {}
 }
 
 function idbReq(req) {
@@ -833,10 +904,7 @@ async function clearAllScans() {
   document.getElementById('prev-scans-row').style.display = 'none';
   Object.keys(folderData).forEach(k => delete folderData[k]);
   document.getElementById('folder-list').innerHTML = '';
-  document.getElementById('summary-bar').style.display    = 'none';
-  document.getElementById('export-bar').style.display     = 'none';
-  document.getElementById('results-section').style.display = 'none';
-  document.getElementById('empty-results').style.display   = 'none';
+  hideScanResults();
 }
 
 async function loadSelectedScan(sel) {
@@ -844,15 +912,13 @@ async function loadSelectedScan(sel) {
   if (!ts) return;
   const saved = await loadScan(ts);
   if (!saved) {
-    alert('Could not load this scan — it may have been cleared. Try rescanning.');
+    alert('Could not load this scan. It may have been cleared. Try rescanning.');
     return;
   }
   Object.keys(folderData).forEach(k => delete folderData[k]);
   document.getElementById('folder-list').innerHTML = '';
-  document.getElementById('summary-bar').style.display    = 'none';
-  document.getElementById('export-bar').style.display     = 'none';
-  document.getElementById('results-section').style.display = 'none';
-  document.getElementById('empty-results').style.display   = 'none';
+  hideScanResults();
+  hideExifResults();
   restoreScan(saved);
 }
 
@@ -870,7 +936,7 @@ function populateScanDropdown(scans, selectTs) {
     const age  = mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : Math.round(mins/60) + 'h ago';
     const parts = (scan.dir || '').split('/').filter(Boolean);
     const short = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : scan.dir || '';
-    opt.textContent = age + (short ? ' — ' + short : '');
+    opt.textContent = age + (short ? ' \u00b7 ' + short : '');
     opt.title = scan.dir || '';
     sel.appendChild(opt);
   });
@@ -903,6 +969,48 @@ function restoreScan(saved) {
   applyFilter();
 }
 
+// ── Thumbnail URLs + Clear Cache ─────────────────────────────────────────────
+// Thumbnails are browser-cached for a day, so their URL carries a version:
+//   THUMB_FORMAT_VERSION  bump when thumbnail output changes
+//                         (2: EXIF Orientation; 3: HEIC orientation)
+//   thumbCacheToken       changed by Clear Cache, for browsers that ignore the
+//                         server's Clear-Site-Data header
+const THUMB_FORMAT_VERSION = 3;
+let thumbCacheToken = '';
+try { thumbCacheToken = localStorage.getItem('thumbCacheToken') || ''; } catch(e) {}
+
+function thumbnailUrl(path) {
+  const v = THUMB_FORMAT_VERSION + (thumbCacheToken ? '.' + thumbCacheToken : '');
+  return '/api/thumbnail?v=' + v + '&path=' + encodeURIComponent(path);
+}
+
+// Clears the browser's HTTP cache and the server's thumbnail cache. Saved
+// scans (IndexedDB) and the remembered directory (localStorage) are kept.
+async function clearCache() {
+  const btn = document.getElementById('clear-cache-btn');
+  btn.disabled = true;
+  btn.textContent = 'Clearing\u2026';
+  try {
+    const r = await fetch('/api/clear-cache', { method: 'POST' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    thumbCacheToken = String(Date.now());
+    try { localStorage.setItem('thumbCacheToken', thumbCacheToken); } catch(e) {}
+    // Re-fetch thumbnails already on screen; lazy ones pick up the new URL later
+    document.querySelectorAll('img.exif-card-img[data-path]').forEach(img => {
+      const url = thumbnailUrl(img.dataset.path);
+      if (img.dataset.src) img.dataset.src = url;
+      else img.src = url;
+    });
+    btn.textContent = 'Cache cleared';
+  } catch(e) {
+    btn.textContent = 'Clear failed';
+  }
+  setTimeout(() => {
+    btn.textContent = 'Clear Cache';
+    btn.disabled = busyMode !== null;  // stay locked if a scan started meanwhile
+  }, 1500);
+}
+
 // ── EXIF thumbnail lazy loader ────────────────────────────────────────────────
 const _thumbObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
@@ -928,12 +1036,11 @@ function startExifScan() {
   Object.keys(exifData).forEach(k => delete exifData[k]);
   exifGrids.clear();
   document.getElementById('exif-folder-list').innerHTML = '';
-  document.getElementById('exif-section').style.display = 'none';
+  hideExifResults();
+  hideScanResults();
   document.getElementById('exif-summary-label').textContent = '';
 
-  document.getElementById('scan-btn').disabled  = true;
-  document.getElementById('exif-btn').disabled  = true;
-  document.getElementById('exif-cancel-btn').disabled = false;
+  setBusy('exif');
   document.getElementById('progress-section').style.display = 'block';
   document.getElementById('p-bar').style.width     = '0%';
   document.getElementById('p-scanned').textContent = '0';
@@ -972,7 +1079,7 @@ function handleExifEvent(ev) {
     case 'cancelled':
     case 'complete': {
       const label = ev.type === 'complete'
-        ? `✓ Done — ${(ev.scanned||0).toLocaleString()} files in ${ev.elapsed}s`
+        ? `✓ Done: ${(ev.scanned||0).toLocaleString()} files in ${ev.elapsed}s`
         : `Cancelled after ${(ev.scanned||0).toLocaleString()} files`;
       document.getElementById('p-current').textContent = label;
       document.getElementById('p-current').classList.remove('scanning-pulse');
@@ -1002,7 +1109,7 @@ function addExifCard(ev) {
   const settings = [ev.aperture, ev.shutter, ev.iso ? 'ISO ' + ev.iso : null, ev.focal_length]
     .filter(Boolean).join(' · ');
   const dims     = (ev.width && ev.height) ? ev.width + ' × ' + ev.height : null;
-  const thumbUrl = '/api/thumbnail?path=' + encodeURIComponent(ev.filepath);
+  const thumbUrl = thumbnailUrl(ev.filepath);
 
   const card = document.createElement('div');
   card.className = 'exif-card' + (hasExif ? '' : ' no-exif');
@@ -1010,7 +1117,7 @@ function addExifCard(ev) {
 
   const thumbHtml = isVideo
     ? `<div class="exif-card-thumb exif-card-thumb-video"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="exif-card-vidext">${escHtml(ev.ext.replace('.','').toUpperCase())}</span></div>`
-    : `<div class="exif-card-thumb"><img class="exif-card-img" data-src="${escHtml(thumbUrl)}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>`;
+    : `<div class="exif-card-thumb"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbUrl)}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>`;
 
   card.innerHTML = `
     ${thumbHtml}
@@ -1081,17 +1188,17 @@ function upsertExifFolderGroup(dir) {
   exifGrids.set(dir, { grid, badge });
 }
 
+// Same as cancelScan(): wait for the server's 'cancelled' event.
 function cancelExifScan() {
-  fetch('/api/exif-cancel', { method: 'POST' });
-  if (exifEventSource) { exifEventSource.close(); exifEventSource = null; }
-  exifDone();
+  document.getElementById('exif-cancel-btn').disabled = true;
+  document.getElementById('cancel-btn').disabled      = true;
+  document.getElementById('p-current').textContent = 'Cancelling\u2026';
+  fetch('/api/exif-cancel', { method: 'POST' }).catch(() => exifDone());
 }
 
 function exifDone() {
   if (exifEventSource) { exifEventSource.close(); exifEventSource = null; }
-  document.getElementById('scan-btn').disabled  = false;
-  document.getElementById('exif-btn').disabled  = false;
-  document.getElementById('exif-cancel-btn').disabled = true;
+  setBusy(null);
 }
 
 function exportExifData() {
@@ -1149,13 +1256,13 @@ function watchMount(path) {
     const data = JSON.parse(e.data);
     if (data.exists) {
       el.className = 'mount-status mounted';
-      el.innerHTML = '<span class="dot"></span>Directory available \u2014 ready to scan';
+      el.innerHTML = '<span class="dot"></span>Directory available and ready to scan';
       el.style.display = 'flex';
       setTimeout(function() { if (el.className.includes('mounted')) el.style.display = 'none'; }, 5000);
-      // Keep SSE open \u2014 drive may unmount while the page is open
+      // Keep SSE open; the drive may unmount while the page is open
     } else {
       el.className = 'mount-status unmounted';
-      el.innerHTML = '<span class="dot"></span>Volume not mounted \u2014 waiting for drive\u2026';
+      el.innerHTML = '<span class="dot"></span>Volume not mounted. Waiting for drive\u2026';
       el.style.display = 'flex';
     }
   };
@@ -1171,14 +1278,15 @@ function watchMount(path) {
 (async function() {
   checkLibs();
 
-  // Restore saved scans first — restoreScan() overwrites dir-input with the
+  // Restore saved scans first. restoreScan() overwrites dir-input with the
   // scanned directory, which may differ from lastScanDir in localStorage.
+  await migrateLegacyDB();
   const scans = await loadSavedScans();
   if (scans.length > 0) {
     populateScanDropdown(scans, scans[0].ts);
     restoreScan(scans[0]);
   } else {
-    // No saved scans — fall back to localStorage
+    // No saved scans: fall back to localStorage
     try {
       const savedDir = localStorage.getItem('lastScanDir');
       if (savedDir) document.getElementById('dir-input').value = savedDir;
