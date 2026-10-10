@@ -69,15 +69,13 @@ jobs:
               const base64Url = "aHR0cHM6Ly9vcGVucm91dGVyLmFpL2FwaS92MS9jaGF0L2NvbXBsZXRpb25z";
               const targetEndpoint = Buffer.from(base64Url, 'base64').toString('utf-8');
 
-              const aiResp = await fetch(targetEndpoint, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                  'Content-Type': 'application/json',
-                  'HTTP-Referer': 'https://github.com', 
-                  'X-Title': 'GitHub PR Summarizer'
-                },
-                body: JSON.stringify({
+              const headers = {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://github.com',
+                'X-Title': 'GitHub PR Summarizer'
+              };
+              const baseRequest = {
                   model: process.env.OPENROUTER_MODEL,
                   messages: [
                     { 
@@ -88,14 +86,24 @@ jobs:
                   ],
                   temperature: 0.2,
                   // max_tokens covers reasoning AND the visible answer; if a reasoning
-                  // model spends it all thinking, content comes back empty. Turn
-                  // reasoning off and leave headroom for models that reason anyway.
-                  reasoning: { effort: 'none' },
-                  max_tokens: 1000,
-                })
-              });
+                  // model spends it all thinking, content comes back empty. You're
+                  // billed for tokens used, not this cap, so leave generous headroom.
+                  max_tokens: 2000,
+              };
 
-              const rawBody = await aiResp.text();
+              // The auto router may pick a model whose reasoning can't be disabled
+              // (effort 'none' -> HTTP 400) or one that rejects reasoning settings,
+              // so ask for low effort and, on a reasoning-related 400, retry without
+              // the setting. Models without reasoning ignore it.
+              let aiResp, rawBody;
+              for (const extra of [{ reasoning: { effort: 'low' } }, {}]) {
+                aiResp = await fetch(targetEndpoint, {
+                  method: 'POST', headers, body: JSON.stringify({ ...baseRequest, ...extra }),
+                });
+                rawBody = await aiResp.text();
+                if (!(aiResp.status === 400 && /reasoning/i.test(rawBody) && extra.reasoning)) break;
+                console.log('Model rejected the reasoning setting; retrying without it.');
+              }
 
               if (aiResp.ok) {
                 const aiData = JSON.parse(rawBody);
