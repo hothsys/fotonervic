@@ -9,3 +9,7 @@ __pycache__/
 # server.sh runtime state
 .server.pid
 .server.port
+
+# Local agent instructions (not tracked)
+AGENTS.md
+CLAUDE.md

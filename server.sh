@@ -19,7 +19,7 @@ APP_TITLE="${APP_TITLE:-$APP_NAME}"
 PID_FILE="$APP_DIR/.server.pid"
 PORT_FILE="$APP_DIR/.server.port"
 LOG_FILE="$APP_DIR/.server.log"
-DEFAULT_PORT=5900
+DEFAULT_PORT="${PORT:-5900}"
 
 # app.py pip-installs missing dependencies before it starts listening, so the
 # first launch can take a while (rawpy is a large download)
