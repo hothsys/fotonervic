@@ -45,7 +45,7 @@ Double-click **`FotoNerveShatter.app`** in the project folder. Foto Nerve Shatte
   - **Or clear the quarantine flag** without rebuilding: in Terminal, from the project folder, run `xattr -dr com.apple.quarantine .`
 
   System Settings' **Open Anyway** isn't enough on its own: it gets past the warning, but macOS then runs the app from a temporary copy where it can't find `app.conf` and `server.sh`.
-- **To stop it or reopen the browser:** double-click FotoNerveShatter.app again. A dialog says Foto Nerve Shatter is already running and offers **Open in Browser** or **Stop Foto Nerve Shatter**.
+- **To stop it or reopen the browser:** double-click FotoNerveShatter.app again. A dialog says Foto Nerve Shatter is already running and offers **Open in Browser** or **Stop Foto Nerve Shatter**. If you keep another copy of the project and launch the app from there, it detects the running instance on the configured port and shows the same dialog.
 - **Dock shortcut:** drag FotoNerveShatter.app onto the Dock. Keep the app itself in the project folder, because it uses `server.sh` next to it.
 
 Prefer a visible log? Double-click **FotoNerveShatter.command** instead; it runs Foto Nerve Shatter in a Terminal window, and pressing Return there stops it. You can also use the `server.sh` commands below.
@@ -62,7 +62,7 @@ From the project folder:
 ./server.sh restart
 ```
 
-Add a port number to `start` or `restart` (e.g. `./server.sh start 8080`) to use a different port.
+Add a port number to `start` or `restart` (e.g. `./server.sh start 8080`) to use a different port. Alternatively, edit `app.conf` (`PORT=5900`) so FotoNerveShatter.app and `server.sh` share the same setting.
 
 ### Windows
 
