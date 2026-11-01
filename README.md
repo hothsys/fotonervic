@@ -1,9 +1,17 @@
-# <img src="logo.svg" width="50" height="65" valign="bottom" />&nbsp;&nbsp;Foto Nerve Shatter
-*I hope you never have to use this. But if you do, I hope it helps.*
+<p align="center">
+  <img src="logo.svg" width="220">
+</p>
 
-This web app recursively scans directories for corrupt, truncated, or damaged image and video files. For images, it attempts recovery where possible. Also extracts EXIF metadata with thumbnail previews across an entire directory.
+<h1 align="center">Foto Nerve Shatter</h1>
 
-Built for data recovery scenarios where hundreds or thousands of photos have been rescued from a failing drive but many are partially damaged. The scanner identifies every problem file, categorizes the damage, and offers one-click repair or salvage for supported image formats.
+<p align="center">
+  <i>I hope you never have to use this. But if you do, I hope it helps.</i>
+  
+  This web app recursively scans directories for corrupt, truncated, or damaged image and video files. For images, it attempts recovery where possible. Also extracts EXIF metadata
+with thumbnail previews across an entire directory.
+  
+  Built for data recovery scenarios where hundreds or thousands of photos have been rescued from a failing drive but many are partially damaged. The scanner identifies every problem file, categorizes the damage, and offers one-click repair or salvage for supported image formats.
+</p>
 
 ## Features
 
