@@ -55,7 +55,23 @@ header p {
   margin-top: 1px;
 }
 header .spacer { flex: 1; }
-header .header-btn { font-size: 11px; padding: 3px 10px; margin-right: 8px; }
+/* Settings menu (cogwheel, top right) */
+.settings-menu { position: relative; margin-left: 10px; }
+.settings-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  padding: 8px;
+}
+.settings-dropdown[hidden] { display: none; }
+.settings-item { width: 100%; justify-content: flex-start; }
+.settings-item-hint { font-size: 11px; color: var(--text3); line-height: 1.45; padding: 6px 4px 2px; }
 header .badge {
   font-family: var(--mono);
   font-size: 11px;
@@ -76,6 +92,37 @@ main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
   border-radius: var(--radius);
   padding: 20px 24px;
   margin-bottom: 24px;
+}
+/* The card is three stacked pieces that look like one: head (label), the
+   sticky scan bar (path + buttons), and body (count, mount status, previous
+   scans). The bar pins to the top of the window when scrolled past. */
+.scan-card-head {
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding-bottom: 8px;   /* spacing as padding: a label margin would collapse */
+  margin-bottom: 0;      /* out of the box and leave a gap above the bar */
+}
+.scan-card-head label { margin-bottom: 0; }
+.scan-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 0 24px;
+  transition: box-shadow .15s;
+}
+.scan-bar.stuck {
+  border: 1px solid var(--border2);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 10px 24px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45);
+}
+.scan-card-body {
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding-top: 0;
 }
 .scan-card label {
   display: block;
@@ -107,16 +154,30 @@ main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
 }
 .input-row input::placeholder { color: var(--text3); }
 .input-row input:disabled { opacity: .5; cursor: not-allowed; }
+/* Every button on the page shares the Browse button's dimensions. Each one has
+   a 1px border (transparent where it isn't drawn) so filled and outlined
+   buttons come out the same height. Variants below change colour only. */
 button {
   cursor: pointer;
   font-family: var(--sans);
   font-size: 13px;
   font-weight: 500;
+  line-height: 17px;      /* fixed, so a symbol from a fallback font can't make one button taller */
   border-radius: var(--radius);
-  border: none;
+  border: 1px solid transparent;
   padding: 9px 18px;
+  min-height: 37px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
   transition: opacity .15s, background .15s;
 }
+/* Icon-only buttons: square, same height */
+.icon-btn { width: 37px; padding: 0; flex-shrink: 0; }
+.icon-btn svg { width: 16px; height: 16px; }
 button:disabled { opacity: .4; cursor: not-allowed; }
 .btn-primary {
   background: var(--amber);
@@ -258,8 +319,6 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   flex-wrap: wrap;
 }
 .filter-btn {
-  font-size: 11px;
-  padding: 4px 10px;
   border-radius: 99px;
   background: var(--surface2);
   color: var(--text2);
@@ -318,7 +377,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .folder-group.open .folder-body { display: block; }
 .issue-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 10px 16px 10px 42px;
   border-bottom: 1px solid var(--border);
@@ -512,13 +571,9 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .copy-path-btn {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 4px;
   color: var(--text3);
-  cursor: pointer;
-  padding: 4px 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 37px;
+  padding: 0;
   flex-shrink: 0;
   transition: color .15s, border-color .15s;
 }
@@ -526,13 +581,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .export-preview-btn {
   background: var(--surface2);
   border: 1px solid rgba(91,138,240,.35);
-  border-radius: 4px;
   color: var(--blue);
-  cursor: pointer;
-  padding: 3px 6px;
-  font-size: 10px;
-  font-family: var(--mono);
-  white-space: nowrap;
   flex-shrink: 0;
   transition: color .15s, border-color .15s;
 }
@@ -541,13 +590,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .repair-jpeg-btn {
   background: var(--surface2);
   border: 1px solid rgba(76,175,130,.35);
-  border-radius: 4px;
   color: var(--green);
-  cursor: pointer;
-  padding: 3px 6px;
-  font-size: 10px;
-  font-family: var(--mono);
-  white-space: nowrap;
   flex-shrink: 0;
   transition: color .15s, border-color .15s;
 }
@@ -556,13 +599,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .salvage-image-btn {
   background: var(--surface2);
   border: 1px solid rgba(230,180,60,.35);
-  border-radius: 4px;
   color: #e6b43c;
-  cursor: pointer;
-  padding: 3px 6px;
-  font-size: 10px;
-  font-family: var(--mono);
-  white-space: nowrap;
   flex-shrink: 0;
   transition: color .15s, border-color .15s;
 }
@@ -596,6 +633,90 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
   transition: border-color .15s;
 }
 .exif-card:hover { border-color: var(--border2); }
+
+/* ── Blur check ── */
+.blur-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text2);
+  margin: 4px 0 6px;
+}
+.blur-controls input[type=range] { width: 220px; accent-color: var(--amber); }
+.blur-threshold-value { font-family: var(--mono); color: var(--text); min-width: 2ch; }
+.blur-show-all { margin-left: 8px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.blur-hint { font-size: 12px; color: var(--text3); margin: 0 0 14px; max-width: 900px; line-height: 1.5; }
+.blur-empty { font-size: 13px; color: var(--text2); padding: 18px 0; }
+.blur-model-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 0 0 14px;
+}
+.blur-model-status.ai    { border-color: rgba(76,175,130,.35); }
+.blur-model-status.error { border-color: rgba(224,82,82,.45); color: var(--red); }
+.blur-model-status.error strong { font-weight: 600; }
+.blur-model-alt { flex-basis: 100%; color: var(--text2); }
+.blur-model-alt a { color: var(--blue); }
+.blur-model-alt code { font-family: var(--mono); font-size: .95em; }
+
+/* Larger text throughout the Blur Check section (cards are shared with Exif
+   Info, so these are scoped to #blur-section) */
+.blur-summary-label { color: var(--text2); }
+#blur-section .blur-controls,
+#blur-section .blur-model-status,
+#blur-section .blur-summary-label,
+#blur-section .blur-hint           { font-size: 14px; }
+#blur-section .blur-empty          { font-size: 15px; }
+#blur-section .folder-path         { font-size: 14px; }
+#blur-section .fc                  { font-size: 13px; }
+#blur-section .exif-grid           { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+#blur-section .exif-card-filename  { font-size: 13px; }
+#blur-section .exif-card-size      { font-size: 12px; }
+#blur-section .blur-badge,
+#blur-section .blur-tag,
+#blur-section .integrity-tag       { font-size: 12.5px; padding: 1px 7px; }
+
+.blur-card.is-blurry { border-color: rgba(224,82,82,.55); }
+.blur-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.blur-badge, .blur-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.blur-badge.sharp    { background: var(--green-dim); color: var(--green); }
+.blur-badge.soft     { background: var(--amber-dim); color: var(--amber); }
+.blur-badge.blurry   { background: var(--red-dim);   color: var(--red); }
+.blur-tag            { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
+/* Integrity: shared by Exif Info and Blur Check cards */
+.integrity-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(224,82,82,.35);
+}
+.card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.exif-card.is-damaged { border-color: rgba(224,82,82,.55); }
+/* Card filename and thumbnail reveal the file in Finder / Explorer */
+.card-filename-link  { color: inherit; text-decoration: none; }
+.card-filename-link:hover { color: var(--amber); text-decoration: underline; }
+.exif-card-thumb[data-reveal] { cursor: pointer; transition: opacity .15s; }
+.exif-card-thumb[data-reveal]:hover { opacity: .85; }
 
 /* Thumbnail area */
 .exif-card-thumb {
@@ -664,7 +785,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .prev-scans-row {
   margin-top: 12px;
   display: flex;
-  align-items: center;
+  align-items: stretch;   /* dropdown and Clear all share one height */
   gap: 10px;
 }
 .prev-scans-label {
@@ -674,16 +795,22 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
   text-transform: uppercase;
   color: var(--text2);
   white-space: nowrap;
+  align-self: center;
 }
 .prev-scans-row select {
   flex: 1;
-  background: var(--bg);
+  /* Drawn by the page rather than as the native macOS control, which ignores
+     padding; this lets it match the height of the path input above */
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%238890a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center / 12px;
   border: 1px solid var(--border2);
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
-  padding: 5px 10px;
+  font-size: 13px;
+  line-height: normal;    /* same as the path input, so the heights match */
+  padding: 9px 38px 9px 14px;
   outline: none;
   cursor: pointer;
 }
@@ -692,6 +819,15 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .prev-scans-row select option { background: var(--surface); }
 
 /* ── Mount status indicator ── */
+.dir-count {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 12px;
+}
+.dir-count strong   { color: var(--amber); font-weight: 600; }
+.dir-count.counting { color: var(--text2); }
+.dir-count.problem  { color: var(--red); }
 .mount-status {
   font-family: var(--mono);
   font-size: 11px;

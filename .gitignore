@@ -13,3 +13,7 @@ __pycache__/
 # Local agent instructions (not tracked)
 AGENTS.md
 CLAUDE.md
+
+# Blur Check's AI quality model: downloaded from a GitHub release, too big for git
+models/*.onnx
+models/*.part

@@ -41,16 +41,28 @@
     <p>Detect partial &amp; corrupt images &amp; videos</p>
   </div>
   <div class="spacer"></div>
-  <button class="btn-outline header-btn" id="clear-cache-btn" onclick="clearCache()"
-          title="Clear cached thumbnails in the browser and server. Saved scans are kept.">Clear Cache</button>
   <div class="badge" id="lib-status">checking libraries…</div>
+  <div class="settings-menu">
+    <button class="btn-outline icon-btn" id="settings-btn" onclick="toggleSettingsMenu()" title="Settings" aria-haspopup="true" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+    <div class="settings-dropdown" id="settings-dropdown" role="menu" hidden>
+      <button class="btn-outline settings-item" id="clear-cache-btn" role="menuitem" onclick="clearCache()">Clear Cache</button>
+      <div class="settings-item-hint">Clears cached thumbnails in the browser and on the server. Saved scans and your last folder are kept.</div>
+    </div>
+  </div>
 </header>
 
 <main>
 
   <!-- Scan Form -->
-  <div class="scan-card">
+  <!-- Scan card, split so the path + buttons row can stick to the top while
+       results scroll (position: sticky only works within its parent) -->
+  <div class="scan-card scan-card-head">
     <label for="dir-input">Root Directory to Scan</label>
+  </div>
+  <div id="scan-bar-sentinel"></div>
+  <div class="scan-bar" id="scan-bar">
     <div class="input-row">
       <input type="text" id="dir-input"
              placeholder="/volume1/photos  or  /Volumes/NAS/photos  or  C:\Photos"
@@ -58,13 +70,17 @@
       <button class="btn-outline" id="browse-btn" onclick="openBrowse()">Browse</button>
       <button class="btn-primary" id="scan-btn" onclick="startScan()">Scan Directory</button>
       <button class="btn-outline" id="exif-btn" onclick="startExifScan()">Exif Info</button>
+      <button class="btn-outline" id="blur-btn" onclick="startBlurScan()">Blur Check</button>
       <button class="btn-danger" id="cancel-btn" onclick="cancelActive()" disabled>Cancel</button>
     </div>
+  </div>
+  <div class="scan-card scan-card-body">
+    <div id="dir-count" class="dir-count" style="display:none"></div>
     <div id="mount-status" class="mount-status" style="display:none"></div>
     <div id="prev-scans-row" class="prev-scans-row" style="display:none">
       <span class="prev-scans-label">Previous scans</span>
       <select id="prev-scans-select" onchange="loadSelectedScan(this)"></select>
-      <button class="btn-outline" id="clear-scans-btn" style="padding:5px 12px;font-size:12px" onclick="clearAllScans()">Clear all</button>
+      <button class="btn-outline" id="clear-scans-btn" onclick="clearAllScans()">Clear all</button>
     </div>
   </div>
 
@@ -73,7 +89,7 @@
     <div class="browse-modal">
       <div class="browse-top">
         <h3>Choose Directory</h3>
-        <button class="btn-outline" onclick="closeBrowse()" style="padding:4px 10px;font-size:12px">&#x2715;</button>
+        <button class="btn-outline icon-btn" onclick="closeBrowse()" title="Close">&#x2715;</button>
       </div>
       <div class="browse-breadcrumb" id="browse-breadcrumb"></div>
       <div class="browse-list" id="browse-list"></div>
@@ -135,7 +151,7 @@
   <div id="export-bar">
     <span id="export-label"></span>
     <div class="btns">
-      <button class="btn-outline" onclick="exportData()">&#x2B07; Export CSV</button>
+      <button class="btn-outline" onclick="exportData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Export CSV</button>
     </div>
   </div>
 
@@ -166,11 +182,32 @@
       <h2>EXIF Info</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="exif-summary-label" style="font-size:12px;color:var(--text2)"></span>
-        <button class="btn-outline" style="padding:5px 14px;font-size:12px" onclick="exportExifData()">&#x2B07; Export CSV</button>
-        <button class="btn-danger" id="exif-cancel-btn" onclick="cancelExifScan()" disabled style="padding:5px 14px;font-size:12px">Cancel</button>
+        <button class="btn-outline" onclick="exportExifData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Export CSV</button>
       </div>
     </div>
     <div id="exif-folder-list"></div>
+  </div>
+
+  <!-- Blur check results -->
+  <div id="blur-section" style="display:none">
+    <div class="results-header">
+      <h2>Blur Check</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="blur-summary-label" class="blur-summary-label"></span>
+        <button class="btn-outline" onclick="exportBlurData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Export CSV</button>
+      </div>
+    </div>
+    <div class="blur-controls">
+      <label for="blur-threshold">Blur threshold</label>
+      <input type="range" id="blur-threshold" min="0" max="100" step="1" oninput="setBlurThreshold(this.value)">
+      <span id="blur-threshold-value" class="blur-threshold-value"></span>
+      <button class="btn-outline blur-reset" onclick="setBlurThreshold(BLUR_DEFAULT_THRESHOLD)" title="Reset to the default threshold (50)">Default</button>
+      <label class="blur-show-all"><input type="checkbox" id="blur-show-all" onchange="applyBlurThreshold()"> Show all photos</label>
+    </div>
+    <p class="blur-hint">Each photo gets a blur score from 0 (sharp) to 100 (very blurry). A sharp subject on a soft, out-of-focus background (bokeh) still counts as sharp. Photos at or above the threshold count as blurry: lower it to catch softer photos, raise it to flag only the worst. Each file's integrity is checked too: damaged files are always shown, even when they look sharp.</p>
+    <div id="blur-model-status" class="blur-model-status"></div>
+    <div id="blur-empty" class="blur-empty" style="display:none">No blurry photos at this threshold.</div>
+    <div id="blur-folder-list"></div>
   </div>
 
   <!-- Legend -->
@@ -217,6 +254,14 @@
 
 </main>
 
-<script src="/js/app.js"></script>
+<script src="/js/core.js"></script>
+<script src="/js/browse.js"></script>
+<script src="/js/history.js"></script>
+<script src="/js/recovery.js"></script>
+<script src="/js/scan.js"></script>
+<script src="/js/exif.js"></script>
+<script src="/js/blur.js"></script>
+<script src="/js/mount.js"></script>
+<script src="/js/main.js"></script>
 </body>
 </html>
