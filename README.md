@@ -21,9 +21,10 @@ with thumbnail previews across an entire directory.
 - **Salvage Image**: recovers JPEGs with destroyed headers (missing SOI) using donor-table grafting and MCU-level remapping
 - **Export Preview**: extracts embedded JPEG previews from RAW files that can't be fully decoded
 - **EXIF Info**: scans every image and video for metadata (camera, date, settings, GPS coordinates, dimensions) and displays it as a lazy-loaded thumbnail card grid grouped by folder
+- **Blur Check**: scores every photo for blur (0 = sharp, 100 = very blurry) without mistaking bokeh for blur, using a sharpness measure plus an optional AI quality model, with a threshold slider to decide what counts as blurry
 - **Volume mount detection**: detects when a drive is mounted/unmounted in real time and shows a status indicator
 - **Previous scans**: last 10 scans persisted to IndexedDB; restore any previous scan from a dropdown without rescanning
-- **CSV export** of scan results and EXIF data
+- **CSV export** of scan results, EXIF data, and blur scores
 - **Directory browser** with breadcrumb navigation
 - **Reveal in Finder/Explorer**: jump to any file from the UI
 
@@ -87,6 +88,8 @@ Leave the window open while you use Foto Nerve Shatter, and press **Ctrl+C** in 
 
 - Python 3.8+
 - Pillow >= 10.0.0
+- numpy >= 1.24 (Blur Check)
+- onnxruntime >= 1.17 (optional: Blur Check's AI quality model; installed automatically)
 
 No external web framework is needed; it uses Python's built-in `http.server`.
 
@@ -143,13 +146,66 @@ Click **Exif Info** to scan every image and video in a directory for metadata. R
 - Image dimensions and file size
 - GPS coordinates (clickable link to Google Maps, when available)
 
-Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder icon.
+Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder icon. Click a thumbnail or filename to reveal the file in Finder / Explorer.
+
+Each file also gets the same integrity check as Scan Directory: damaged files get a red **Damaged** tag (hover for the exact problem), are counted in the summary, and the CSV export includes Integrity columns. The check fully decodes every file, including RAW sensor data, so Exif Info is slower on RAW-heavy folders (125 NEFs: about 60 seconds instead of 15).
+
+## Blur Check
+
+Click **Blur Check** to score every photo in a directory for blur. Results appear as a thumbnail grid grouped by folder, blurriest first, each with a blur score from **0 (sharp)** to **100 (very blurry)**.
+
+- **Blur threshold slider:** photos scoring at or above it count as blurry; by default only those are shown. Moving it re-filters instantly (no rescan), and the setting is remembered. **Default** resets it to 50.
+- **Show all photos** lists every photo, with the blurry ones outlined in red.
+- **Low detail** marks photos with too little texture to judge focus (fog, sky, plain walls).
+- **Export CSV** saves every photo's score, its components, and whether it's blurry at the current threshold.
+
+### AI-assisted scoring
+
+Blur Check combines two measurements:
+
+1. **A sharpness measure** (always available): the variance of the Laplacian, scored by the photo's sharpest region so a sharp subject on a soft, out-of-focus background (bokeh) still counts as sharp, checked in every direction to catch camera shake, and contrast-normalized so dark photos aren't penalized. It's good at blur specifically, but its scale depends on the scene: a crisp portrait has less edge detail than crisp carved stone, so one threshold doesn't fit every folder.
+2. **An AI quality model** (optional, recommended): **CLIP-IQA+**, a trained image-quality model that judges photos the way people do across cameras and scenes. On its own it also marks dark photos down, which is why it's combined with the sharpness measure rather than used alone.
+
+A third check catches photos that look ordinary to both: ones smeared by camera shake, soft low-resolution exports, or heavy phone noise reduction can keep plenty of edge contrast while losing nearly all fine detail. When a photo's sharpest areas have almost no fine detail (measured in the frequency domain), it's flagged, unless the AI model rates the photo above average (some phones' own processing leaves sharp photos with little fine detail too).
+
+Before scoring, dark photos are brightened (shadows lifted most, like raising exposure in an editor), because underexposure is fixable in post-processing and shouldn't count as blur. This happens on an in-memory copy; files are never modified.
+
+The two scores are standardized against a reference library and blended, with the AI model weighted 60% and the sharpness measure 40% (the AI model judges bokeh portraits and smeared zooms better; the sharpness measure catches real softness the AI model can miss, and isn't fooled by dark photos). The default threshold of 50 sits on the boundary between photos the owner judged sharp and photos they judged blurry (41 photos from 11 cameras, 2001 to 2025). On an 851-photo curated iPhone/Nikon D810 library, 17 photos (2%) are flagged at the default.
+
+**Installing the model:** the first Blur Check without it shows **Basic scoring** with a **Download model** button (146 MB, one time). The app downloads it with `curl`, verifies its SHA-256 checksum, and stores it in `models/`. It needs `onnxruntime`, which the app installs automatically on startup (optional: if that install fails, Blur Check keeps using basic scoring).
+
+**Speed:** about 0.25 s per photo with the AI model (an 851-photo folder takes under 4 minutes), versus about 15 seconds for the whole folder with basic scoring.
+
+**License:** the model file is **not** covered by this project's MIT license. It combines OpenAI's CLIP image encoder (MIT) with learned prompts from pyiqa (PolyForm Noncommercial), so it's for **non-commercial use only**. See [`models/MODEL_LICENSE.md`](models/MODEL_LICENSE.md).
+
+#### Publishing the model (maintainers)
+
+The 146 MB model is too big for git, so it's distributed as a GitHub release file:
+
+1. Build it (or use the copy in `models/`): see the instructions at the top of [`tools/export_quality_model.py`](tools/export_quality_model.py). It needs PyTorch in a throwaway virtual environment, checks that the exported model reproduces pyiqa exactly, and prints the file's SHA-256, which must match `QUALITY_MODEL_SHA256` in `backend/blur/quality_model.py`.
+2. Create a GitHub release tagged `quality-model-v1` and attach `models/clipiqa_plus_rn50.onnx` and `models/MODEL_LICENSE.md`.
+3. `QUALITY_MODEL_URL` in `app.conf` already points at that release file.
+
+**Limitations:** neither measurement knows what you *meant* to focus on, so a photo with the background in focus and the subject soft can count as sharp. Intentional softness (long-exposure water, mist, haze) can score as blurry. The calibration rests on a small labelled set (six photos) plus one large library, so if the default doesn't match your eye, the slider is the fix. RAW files are scored from their embedded full-size preview when there is one. When the preview is too small (e.g. iPhone DNGs), a same-name JPEG/HEIC saved alongside it (RAW+JPEG shooting) is scored instead; without one, the sensor data is decoded and lightly sharpened to approximate the camera's processing. The card's tooltip says which was used.
 
 ## How It Works
 
-The backend is `app.py`, a Python HTTP server (built on `http.server`, no framework) with a thread pool (4 workers) for parallel file checking. The frontend is split across `index.html`, `css/styles.css`, and `js/app.js`. No build step, no node_modules, no framework dependencies.
+The backend is a Python HTTP server (built on `http.server`, no framework) with a thread pool (4 workers) for parallel file checking. `app.py` is only the entry point: it installs missing dependencies and starts the server. The application lives in `backend/`:
 
-Scan results stream to the browser in real time via SSE. Each file is validated by a format-specific checker that examines container structure (headers, markers, atoms) and attempts a full Pillow decode. Previous scans are persisted to IndexedDB (last 10) and restored automatically on page load.
+| Module | What it does |
+|---|---|
+| `server.py` | HTTP handler: serves the frontend and the `/api/` endpoints |
+| `integrity/` | Integrity checks, one module per format family (`jpeg`, `png`, `heic`, `raw`, `video`, `generic`), and `check_integrity()`, which every scan uses |
+| `scan.py` | Scan Directory and the pre-scan media count |
+| `exif.py`, `thumbnails.py` | EXIF extraction and the Exif Info scan; card thumbnails |
+| `blur/` | Blur Check: `calibration.py` (every tunable number), `loading.py`, `sharpness.py`, `quality_model.py`, `score.py`, `scan.py` |
+| `tiff.py` | TIFF structure parsing and embedded RAW preview extraction |
+| `repair.py` | JPEG salvage |
+| `config.py`, `formats.py`, `jobs.py` | Paths and `app.conf`, supported extensions, scan cancellation |
+
+The frontend is `index.html`, `css/styles.css`, and plain scripts in `js/`, one per feature (`scan.js`, `exif.js`, `blur.js`, `browse.js`, `history.js`, `recovery.js`, `mount.js`), with shared helpers in `core.js` and startup in `main.js`. No build step, no node_modules, no framework dependencies.
+
+Scan results stream to the browser in real time via SSE. Each file is validated by a format-specific checker that examines container structure (headers, markers, atoms) and attempts a full Pillow decode. Previous scans are persisted to IndexedDB (last 10) and listed in the Previous scans dropdown; picking one loads it.
 
 ## License
 

@@ -3,9 +3,15 @@
 # Required
 Pillow>=13.0.0
 
+# Blur detection (Blur Check)
+numpy>=1.24
+
 # Optional but strongly recommended
 # Enables full RAW support: NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW
 rawpy>=0.28.0
 
 # Optional: enables HEIC/HEIF support (iPhone photos)
 pillow-heif>=1.8.1
+
+# Optional: AI quality model for Blur Check (falls back to basic scoring without it)
+onnxruntime>=1.17
