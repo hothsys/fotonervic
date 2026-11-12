@@ -14,4 +14,4 @@ rawpy>=0.28.0
 pillow-heif>=1.8.1
 
 # Optional: AI quality model for Blur Check (falls back to basic scoring without it)
-onnxruntime>=1.17
+onnxruntime>=1.31.1
