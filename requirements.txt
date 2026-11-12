@@ -4,7 +4,7 @@
 Pillow>=13.0.0
 
 # Blur detection (Blur Check)
-numpy>=1.24
+numpy>=2.5.4
 
 # Optional but strongly recommended
 # Enables full RAW support: NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW
