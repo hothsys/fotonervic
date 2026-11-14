@@ -35,6 +35,7 @@ function startExifScan() {
   exifDamagedTotal = 0;
 
   setBusy('exif');
+  refreshExiftoolStatus();
   document.getElementById('progress-section').style.display = 'block';
   document.getElementById('p-bar').style.width     = '0%';
   document.getElementById('p-scanned').textContent = '0';
@@ -88,6 +89,86 @@ function handleExifEvent(ev) {
   }
 }
 
+// ── Metadata note: ⓘ bubble with a pop-out explaining missing camera details ──
+// One shared pop-out, positioned next to the clicked bubble (a pop-out inside
+// the card would be clipped by it). Opens on click or Enter/Space; closes on
+// a click elsewhere, Escape, or scroll.
+const METADATA_NOTE_HELP = {
+  no_camera: `
+    <strong>Why there are no camera details</strong>
+    <p>This file doesn't record which camera or phone took it, so there is no make, model, lens, or exposure to show. Common reasons:</p>
+    <ul>
+      <li><b>Saved from a messaging or social app</b> (WhatsApp, Messenger, Instagram, and others): they remove camera details and location when a photo is shared, and usually shrink it.</li>
+      <li><b>Downloaded</b> from a website or some cloud and photo services, which strip metadata from downloads.</li>
+      <li><b>A screenshot</b> or screen recording.</li>
+      <li><b>A scan</b>, or a photo of a print.</li>
+      <li><b>An edited or converted copy</b> from an app that doesn't carry metadata over.</li>
+      <li><b>An old camera or phone</b> that didn't record a make and model.</li>
+    </ul>
+    <p>Exif Info shows everything the file contains. The original photo, if you have it, may still have these details.</p>`,
+  export: `
+    <strong>Why the camera details were removed</strong>
+    <p>This file was exported by Lightroom or Photoshop with its camera metadata left out: only the editor's signature remains, so there is no camera, lens, capture date, exposure, or location.</p>
+    <p>In Lightroom Classic's Export dialog, the <b>Metadata</b> section's <b>Include</b> setting controls this. <i>Copyright Only</i> or <i>Copyright &amp; Contact Info Only</i> remove it; <i>All Metadata</i> keeps it. Turning on <i>Remove Location Info</i> drops GPS only.</p>
+    <p>Re-export with <i>All Metadata</i>, or run Exif Info on the originals.</p>`,
+};
+
+function metadataNoteHelp(bubble) {
+  let html = METADATA_NOTE_HELP[bubble.dataset.noteKind] || '';
+  const w = +bubble.dataset.w, h = +bubble.dataset.h;
+  if (bubble.dataset.noteKind === 'no_camera' && w && h && Math.max(w, h) <= 2048) {
+    html += `<p class="info-pop-detail">This copy is ${w} × ${h}, smaller than a modern camera or phone original, which points to a shared or downloaded copy.</p>`;
+  }
+  return html;
+}
+
+function closeInfoPop() {
+  const pop = document.getElementById('info-pop');
+  if (pop) pop.hidden = true;
+  document.querySelectorAll('.info-bubble[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+
+function toggleInfoPop(bubble) {
+  let pop = document.getElementById('info-pop');
+  const wasOpenHere = pop && !pop.hidden && bubble.getAttribute('aria-expanded') === 'true';
+  closeInfoPop();
+  if (wasOpenHere) return;
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'info-pop';
+    pop.setAttribute('role', 'dialog');
+    document.body.appendChild(pop);
+  }
+  pop.innerHTML = metadataNoteHelp(bubble);
+  pop.style.maxHeight = '';
+  pop.hidden = false;
+  bubble.setAttribute('aria-expanded', 'true');
+  // Below the bubble if it fits, else on the roomier side, never covering the
+  // bubble (it scrolls if there isn't room for all of it); kept inside the window
+  const r = bubble.getBoundingClientRect(), pr = pop.getBoundingClientRect(), gap = 8;
+  const roomBelow = window.innerHeight - r.bottom - 2 * gap, roomAbove = r.top - 2 * gap;
+  const below = pr.height <= roomBelow || roomBelow >= roomAbove;
+  const height = Math.min(pr.height, below ? roomBelow : roomAbove);
+  if (height < pr.height) pop.style.maxHeight = height + 'px';
+  pop.style.left = Math.min(Math.max(gap, r.left + r.width / 2 - pr.width / 2), window.innerWidth - pr.width - gap) + 'px';
+  pop.style.top = (below ? r.bottom + gap : r.top - gap - height) + 'px';
+}
+
+document.addEventListener('click', e => {
+  const bubble = e.target.closest('.info-bubble');
+  if (bubble) { e.preventDefault(); e.stopPropagation(); toggleInfoPop(bubble); return; }
+  if (!e.target.closest('#info-pop')) closeInfoPop();
+});
+document.addEventListener('keydown', e => {
+  const bubble = e.target.closest && e.target.closest('.info-bubble');
+  if (bubble && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleInfoPop(bubble); }
+  else if (e.key === 'Escape') closeInfoPop();
+});
+window.addEventListener('scroll', e => {          // the page scrolled, not the pop-out's own text
+  if (!(e.target.closest && e.target.closest('#info-pop'))) closeInfoPop();
+}, true);
+window.addEventListener('resize', closeInfoPop);
+
 function addExifCard(ev) {
   upsertExifFolderGroup(ev.dir);
   if (!exifData[ev.dir]) exifData[ev.dir] = { files: [], count: 0 };
@@ -100,7 +181,10 @@ function addExifCard(ev) {
 
   const hasExif  = ev.has_exif;
   const isVideo  = ['.mp4','.m4v','.mov','.avi','.mpg','.mpeg'].includes(ev.ext);
-  const camera   = [ev.make, ev.model].filter(Boolean).join(' ') || null;
+  // Skip the make when the model already names the brand ("Canon EOS R5", "NIKON D810")
+  const brand    = (ev.make || '').split(' ')[0].toLowerCase();
+  const camera   = (brand && ev.model && ev.model.toLowerCase().startsWith(brand))
+    ? ev.model : [ev.make, ev.model].filter(Boolean).join(' ') || null;
   const settings = [ev.aperture, ev.shutter, ev.iso ? 'ISO ' + ev.iso : null, ev.focal_length]
     .filter(Boolean).join(' · ');
   const dims     = (ev.width && ev.height) ? ev.width + ' × ' + ev.height : null;
@@ -121,12 +205,17 @@ function addExifCard(ev) {
     <div class="exif-card-meta">
       <a class="exif-card-filename card-filename-link" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
       ${camera   ? `<div class="exif-card-camera">${escHtml(camera)}</div>` : ''}
+      ${ev.lens  ? `<div class="exif-card-lens" title="${escHtml(ev.lens)}">${escHtml(ev.lens)}</div>` : ''}
       ${ev.date  ? `<div class="exif-card-date"><span class="exif-card-label">Capture Time</span> ${escHtml(ev.date)}</div>` : ''}
       ${settings ? `<div class="exif-card-settings">${escHtml(settings)}</div>` : ''}
       ${dims     ? `<div class="exif-card-dims">${escHtml(dims)}</div>` : ''}
       <div class="exif-card-size">${formatSize(ev.file_size || 0)}</div>
       ${(ev.gps_lat != null && ev.gps_lng != null) ? `<a class="exif-card-gps" href="https://maps.google.com/?q=${ev.gps_lat},${ev.gps_lng}" target="_blank" rel="noopener">◎ ${ev.gps_lat.toFixed(4)}, ${ev.gps_lng.toFixed(4)}</a>` : ''}
-      <div class="exif-card-no-exif">No EXIF</div>
+      ${ev.metadata_note
+        ? `<div class="exif-card-note ${ev.metadata_note_kind === 'export' ? 'note-export' : ''}">${escHtml(ev.metadata_note)}`
+          + ` <span class="info-bubble" role="button" tabindex="0" aria-label="Why?" aria-expanded="false" aria-controls="info-pop"`
+          + ` data-note-kind="${escHtml(ev.metadata_note_kind || '')}" data-w="${ev.width || ''}" data-h="${ev.height || ''}">i</span></div>`
+        : '<div class="exif-card-no-exif">No EXIF</div>'}
       ${damaged ? `<div class="card-tags">${integrityTagHtml(ev)}</div>` : ''}
     </div>
   `;
@@ -199,12 +288,13 @@ function cancelExifScan() {
 function exifDone() {
   if (exifEventSource) { exifEventSource.close(); exifEventSource = null; }
   setBusy(null);
+  refreshExiftoolStatus();   // re-enable its buttons
 }
 
 function exportExifData() {
   const header = ['Filename','Directory','Extension','File Size (bytes)',
                   'Camera Make','Camera Model','Lens','Date',
-                  'ISO','Aperture','Shutter','Focal Length','Width','Height','GPS Lat','GPS Lng','Has EXIF',
+                  'ISO','Aperture','Shutter','Focal Length','Width','Height','GPS Lat','GPS Lng','Has EXIF','Metadata Note',
                   'Integrity','Integrity Issue'];
   const rows = [header];
   for (const fd of Object.values(exifData)) {
@@ -227,6 +317,7 @@ function exportExifData() {
         r.gps_lat != null ? r.gps_lat : '',
         r.gps_lng != null ? r.gps_lng : '',
         r.has_exif ? 'Yes' : 'No',
+        r.metadata_note || '',
         ...integrityCsvCells(r),
       ]);
     }
@@ -241,4 +332,52 @@ function exportExifData() {
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ── ExifTool status / download ──
+// Exif Info reads metadata with the app's own ExifTool, which the server
+// downloads at launch when it's missing or too old. This box appears only when
+// something needs attention: a download in progress or failed, an update, or
+// metadata limited to the built-in reader.
+let exiftoolPollTimer = null;
+
+async function refreshExiftoolStatus() {
+  let st;
+  try { st = await (await fetch('/api/exiftool')).json(); } catch(e) { return; }
+  const el = document.getElementById('exif-meta-status');
+  const dl = st.download || {};
+  const link = '<a href="https://exiftool.org" target="_blank" rel="noopener">ExifTool</a>';
+  el.className = 'blur-model-status';
+  el.hidden = false;
+  clearTimeout(exiftoolPollTimer);
+  // Without the app's copy, an ExifTool installed some other way stands in
+  const fallback = when => st.available ? ` Using the ExifTool installed on this Mac ${when}.`
+                                        : ` ${when === 'until then' ? 'Until then' : 'For now'}, Exif Info uses its basic built-in reader.`;
+
+  if (dl.state === 'downloading' || dl.state === 'verifying') {
+    el.textContent = (dl.state === 'verifying' ? 'Verifying ExifTool\u2026' : 'Downloading ExifTool from exiftool.org\u2026') + fallback('until then');
+    exiftoolPollTimer = setTimeout(refreshExiftoolStatus, 1000);
+  } else if (!st.wrapper_installed) {
+    el.textContent = 'Exif Info is using its basic built-in reader: the PyExifTool package didn\u2019t install. Restart the app to retry.';
+  } else if (dl.state === 'error') {
+    el.classList.add('error');
+    el.innerHTML = `<span title="${escHtml(dl.detail || '')}"><strong>ExifTool download failed.</strong> ${escHtml(dl.error || 'Unknown error.')}${escHtml(fallback('for now'))}</span>`
+      + ' <button class="btn-outline" onclick="downloadExiftool()">Try again</button>';
+  } else if (!st.available) {
+    el.innerHTML = `<span>Exif Info is using its basic built-in reader, which misses RAW metadata and lens names. ${link} adds them.</span>`
+      + (st.can_download ? ' <button class="btn-outline" onclick="downloadExiftool()">Download ExifTool</button>'
+                         : ' <span>Downloading it needs Perl and curl.</span>');
+  } else if (st.update_available) {
+    el.innerHTML = `<span>${link} ${escHtml(st.latest)} is available (this app uses ${escHtml(st.version || '')}).</span>`
+      + ' <button class="btn-outline" onclick="downloadExiftool()">Update</button>';
+  } else {
+    el.hidden = true;   // nothing needs attention
+    el.innerHTML = '';
+  }
+  el.querySelectorAll('button').forEach(b => { b.disabled = busyMode !== null; });
+}
+
+async function downloadExiftool() {
+  try { await fetch('/api/exiftool/download', { method: 'POST' }); } catch(e) {}
+  refreshExiftoolStatus();
 }

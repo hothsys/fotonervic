@@ -70,6 +70,7 @@ document.addEventListener('click', function(e) {
 (async function() {
   checkLibs();
   refreshQualityModelStatus();   // so the Blur Check panel is current when it appears
+  refreshExiftoolStatus();       // likewise for the Exif Info panel
 
   // Saved scans are listed but not loaded; the user picks one from the
   // dropdown. The directory box gets the last folder any scan was started on.

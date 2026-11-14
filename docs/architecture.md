@@ -20,6 +20,7 @@ Foto Nerve Shatter is a local web app: a Python backend built on the standard li
 | `js/*.js` | Client logic, split by feature (see below) |
 | `app.conf` | App name, title, port, and the AI model's download URL; read by `server.sh`, the launchers, and `backend/config.py` |
 | `server.sh`, `launcher/` | Start/stop script and the macOS launchers that call it |
+| `.venv/` | The app's Python environment, created on first launch (not in git) |
 | `models/` | The AI quality model (downloaded in-app; not in git) and its license |
 | `tools/export_quality_model.py` | One-off build script for the AI model; the app never runs it |
 
@@ -32,7 +33,8 @@ Modules import each other absolutely (`from backend.x import ...`).
 | `server.py` | `ScannerHandler` (a `SimpleHTTPRequestHandler`): static files from the project folder, everything under `/api/` handled explicitly. The JPEG repair path lives here (`_handle_repair_jpeg`) |
 | `integrity/` | One checker per format family (`jpeg.py`, `png.py`, `heic.py`, `raw.py`, `video.py`, `generic.py`), dispatched by extension in `check_image()`; `check_integrity()` wraps it for the scans that report integrity alongside other results |
 | `scan.py` | Scan Directory (`scan_directory_gen`) and the pre-scan media count (`count_media_gen`) |
-| `exif.py` | EXIF extraction, orientation, and the Exif Info scan (`exif_scan_gen`) |
+| `exif.py` | Metadata extraction (ExifTool when available, else the built-in reader), orientation, and the Exif Info scan (`exif_scan_gen`) |
+| `exiftool.py` | ExifTool: the app's own copy in the user's cache folder (downloaded at launch when missing or older than `EXIFTOOL_MIN_VERSION`, checksum-verified; another exiftool only until then), one stay-open process via PyExifTool, status, updates |
 | `thumbnails.py` | Card thumbnails with an in-memory LRU cache |
 | `preview.py` | Lightbox previews: upright JPEGs at screen size (2560 px) or full resolution, from the same sources Blur Check scores (RAW embedded preview, companion JPEG/HEIC, sensor data), with a size-capped cache |
 | `blur/` | Blur Check: `calibration.py` (every tunable number), `loading.py`, `sharpness.py`, `quality_model.py`, `score.py` (`measure_blur`), `scan.py` (`blur_scan_gen`) |
@@ -61,7 +63,7 @@ Plain global scripts (no build step, no ES modules), loaded in order by `index.h
 
 ## Startup
 
-`app.py` checks for Pillow, rawpy, pillow-heif, and numpy and installs any that are missing with pip before importing the backend; then it tries onnxruntime, which is optional (if that install fails, Blur Check uses basic scoring). The minimum versions it installs are listed in `_ensure_dependencies()`; `requirements.txt` is for installing everything manually.
+Zero configuration. `app.py` runs the app in its own virtual environment, `.venv/`: on first launch it creates it and restarts itself inside it (`os.execv`, so `server.sh`'s PID stays valid). It then installs `requirements.txt`, but only when the file's SHA-256 differs from the one stored in `.venv/.requirements.sha256`, i.e. on first launch and after Dependabot (or you) change it; other launches skip installing. Required lines are installed together (the app won't start without them); lines marked `# optional` one at a time, so a failure only turns that feature off (e.g. no onnxruntime: Blur Check uses basic scoring; no PyExifTool: Exif Info uses its built-in reader). Packages are installed with [uv](https://docs.astral.sh/uv/): pip installs uv itself into `.venv` first (the `uv` line in `requirements.txt`, so Dependabot updates it too), then uv installs everything in one call, with `--native-tls` so it trusts the macOS keychain like curl (TLS-inspecting proxies). If that call fails, it installs the required packages, then each optional one separately. If uv can't be installed, plain pip does the same. uv downloads in parallel and links packages from its cache (`~/.cache/uv`), so a reinstall after a `requirements.txt` change takes about half a second. Before installing, `ensure_exiftool()` starts ExifTool's background download if the app's copy is missing or older than `EXIFTOOL_MIN_VERSION` (it needs nothing from pip). Measured here, with empty caches: serving after 6 s (pip alone: 10 to 17 s); after a `requirements.txt` change: 0.4 s. `server.sh` allows up to 10 minutes for slow connections.
 
 ## Scans
 
@@ -82,6 +84,8 @@ Scan Directory, Exif Info, and Blur Check are generators that walk a directory, 
 | GET | `/api/browse?path=` | Directory listing for the folder browser |
 | GET | `/api/libs` | Which imaging libraries (Pillow, rawpy, pillow-heif) are available |
 | GET | `/api/mount-status?path=` | SSE: mount/unmount events for the directory's volume |
+| GET | `/api/exiftool` | ExifTool status: installed (where, which version), newest version, download progress |
+| POST | `/api/exiftool/download` | Download or update the app's ExifTool (to the latest release) |
 | GET | `/api/quality-model` | AI model status: runtime installed, model present, download progress |
 | POST | `/api/quality-model/download` | Start downloading the AI model |
 | POST | `/api/cancel` | Cancel the running Scan Directory |
@@ -114,4 +118,9 @@ CSV exports are built in the browser from the results already on the page.
 
 ## Privacy
 
-100% local. The server binds to `127.0.0.1` only: no account, no telemetry. The only network requests are the web fonts and, if you click **Download model** in Blur Check, the one-time model download from GitHub.
+100% local. The server binds to `127.0.0.1` only: no account, no telemetry. Your photos never leave the machine. The only network requests are:
+
+- the web fonts
+- Python packages from PyPI, on first launch and when `requirements.txt` changes
+- ExifTool from exiftool.org/SourceForge, when the app's copy is missing or too old, plus a once-a-day check of exiftool.org's version number so the panel can offer updates
+- the AI quality model from GitHub, once, if you click **Download model** in Blur Check

@@ -45,7 +45,7 @@ How each format is checked: [Supported formats](docs/supported-formats.md).
 
 ## Starting and Stopping
 
-Foto Nerve Shatter runs as a local web server at [http://localhost:5900](http://localhost:5900) and opens your browser when it starts. Missing dependencies are installed automatically on first run, so the first launch can take a minute.
+Foto Nerve Shatter runs as a local web server at [http://localhost:5900](http://localhost:5900) and opens your browser when it starts. There's nothing to install by hand: on first launch it creates its own Python environment (`.venv/` in the project folder, so your system Python is untouched), installs [`requirements.txt`](requirements.txt) into it with [uv](https://docs.astral.sh/uv/) (a fast installer, set up automatically), and downloads ExifTool for Exif Info at the same time. That's about 40 MB, so the first launch takes 5 to 30 seconds depending on your connection. Later launches start in about a second; when `requirements.txt` changes (e.g. a Dependabot update), the reinstall takes under a second.
 
 ### macOS
 
@@ -89,23 +89,15 @@ Leave the window open while you use Foto Nerve Shatter, and press **Ctrl+C** in 
 
 ## Requirements
 
-- Python 3.10+
-- Pillow
-- numpy (Blur Check)
-- onnxruntime (optional: Blur Check's AI quality model)
+- Python 3.10+ (macOS includes Perl and curl, which ExifTool's download uses)
 
-No external web framework is needed; it uses Python's built-in `http.server`.
+Everything else is installed automatically into `.venv/` from [`requirements.txt`](requirements.txt), which Dependabot keeps current:
 
-Optional, but installed automatically along with the rest:
+- **Pillow**, **numpy**: required
+- **uv**: the installer `app.py` uses for the rest (installed with pip first; if it can't be, pip is used instead)
+- **rawpy** (full RAW support), **pillow-heif** (HEIC/HEIF), **onnxruntime** (Blur Check's AI quality model), **PyExifTool** (runs ExifTool for Exif Info): optional, marked `# optional` in `requirements.txt`. Each is installed on its own, so if one fails (e.g. no build for a new Python version yet) only that feature is turned off.
 
-- **rawpy**: full RAW format support (NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW)
-- **pillow-heif**: HEIC/HEIF support (iPhone photos)
-
-Minimum versions are in [`requirements.txt`](requirements.txt). To install everything manually:
-
-```bash
-pip install -r requirements.txt
-```
+No external web framework is needed; it uses Python's built-in `http.server`. To start over with a clean environment, delete `.venv/` and launch again.
 
 ## Issue Types
 
@@ -147,15 +139,18 @@ More detail, including which action fits which status: [Recovery techniques](doc
 Click **Exif Info** to scan every image and video in a directory for metadata. Results appear as a card grid grouped by folder. Each card shows:
 
 - Thumbnail (lazy-loaded as you scroll, so it handles 10k+ files efficiently)
-- Camera make and model
-- Capture time
+- Camera make and model, and the lens
+- Capture time (when the photo was taken)
 - Exposure settings (aperture, shutter speed, ISO, focal length)
 - Image dimensions and file size
 - GPS coordinates (clickable link to Google Maps, when available)
+- A note when camera details are missing, instead of an empty card: removed on export by an editor (e.g. Lightroom's *Include: Copyright Only*), or simply not in the file (e.g. photos saved from messaging apps, screenshots)
 
-Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder icon. Click a photo's thumbnail to preview it in the lightbox (see [Lightbox preview](#lightbox-preview)); click a filename, or a video's thumbnail, to reveal the file in Finder / Explorer.
+Supports JPEG, PNG, HEIC, TIFF, WebP, and every supported RAW format (NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW, and more). Videos show a placeholder icon. Click a photo's thumbnail to preview it in the lightbox (see [Lightbox preview](#lightbox-preview)); click a filename, or a video's thumbnail, to reveal the file in Finder / Explorer.
 
 Each file also gets the same integrity check as Scan Directory: damaged files get a red **Damaged** tag (hover for the exact problem), are counted in the summary, and the CSV export includes Integrity columns. The check fully decodes every file, including RAW sensor data, so Exif Info is slower on RAW-heavy folders (125 NEFs: about 60 seconds instead of 15).
+
+**ExifTool:** metadata is read by [ExifTool](https://exiftool.org), which knows practically every camera's files, including lens names hidden in maker notes, and is updated for new cameras every few weeks. The app keeps its own copy (about 8 MB, checksum-verified, in `~/Library/Caches/FotoNerveShatter/exiftool`, outside the project): it's downloaded at launch whenever it's missing or older than `EXIFTOOL_MIN_VERSION` in `app.conf`, and the panel above the results offers an **Update** when exiftool.org has a newer release. No Homebrew or PATH setup is needed; an `exiftool` you installed yourself is used only until the app's copy is in place. With ExifTool, videos also show their camera, capture time, and GPS. Until it's available, a basic built-in reader shows the common fields for JPEG, HEIC, and some RAW files.
 
 How metadata and thumbnails are read: [EXIF Info](docs/exif.md).
 
@@ -165,7 +160,7 @@ Click **Blur Check** to score every photo in a directory for blur. Results appea
 
 - **Blur threshold slider:** photos scoring at or above it count as blurry; by default only those are shown. Moving it re-filters instantly (no rescan), and the setting is remembered. **Default** resets it to 50.
 - **Show all photos** lists every photo, with the blurry ones outlined in red.
-- **Score colors:** green below 15, yellow from 15 to 49, red at 50 or above (fixed bands, whatever the slider is set to).
+- **Score colours:** green below 15, yellow from 15 to 49, red at 50 or above (fixed bands, whatever the slider is set to).
 - **Low detail** marks photos with too little texture to judge focus (fog, sky, plain walls).
 - **Export CSV** saves every photo's score, its components, and whether it's blurry at the current threshold.
 - **Preview:** click a thumbnail to check a photo full screen and zoom in to 100% (see [Lightbox preview](#lightbox-preview)); the caption shows its blur score.
@@ -245,4 +240,4 @@ Module responsibilities, every API endpoint, and the concurrency model: [Archite
 
 ## License
 
-MIT. The AI quality model is non-commercial only (see [AI-assisted scoring](#ai-assisted-scoring)).
+MIT. ExifTool isn't bundled; when the app downloads it, it's under ExifTool's own license (the same terms as Perl). The AI quality model is non-commercial only (see [AI-assisted scoring](#ai-assisted-scoring)).

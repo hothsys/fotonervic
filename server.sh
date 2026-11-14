@@ -21,9 +21,10 @@ PORT_FILE="$APP_DIR/.server.port"
 LOG_FILE="$APP_DIR/.server.log"
 DEFAULT_PORT="${PORT:-5900}"
 
-# app.py pip-installs missing dependencies before it starts listening, so the
-# first launch can take a while (rawpy is a large download)
-START_TIMEOUT_SECS=120
+# On first launch (and after requirements.txt changes) app.py creates .venv and
+# pip-installs requirements.txt before it starts listening; the first time is
+# about 40 MB of downloads (10 to 30 s normally); allow plenty for slow connections
+START_TIMEOUT_SECS=600
 
 running_pid() {
   [[ -f "$PID_FILE" ]] || return 1
@@ -64,24 +65,46 @@ start() {
     return 1
   fi
 
+  echo "Starting $APP_TITLE on port $port (log: ${LOG_FILE#"$APP_DIR"/})..."
   nohup python3 -u "$APP_DIR/app.py" "$port" >"$LOG_FILE" 2>&1 &
   echo $! >"$PID_FILE"
   echo "$port" >"$PORT_FILE"
 
-  # Wait for the server to start listening
+  # Wait for the server to start listening, showing what it logs meanwhile
+  # (setting up .venv, installing dependencies, ExifTool), indented
+  local started=$SECONDS quiet_since=$SECONDS shown=0 lines
   for _ in $(seq 1 $((START_TIMEOUT_SECS * 4))); do
+    lines=$(wc -l <"$LOG_FILE" 2>/dev/null | tr -d ' ')
+    if (( ${lines:-0} > shown )); then
+      sed -n "$((shown + 1)),${lines}p" "$LOG_FILE" | show_log_lines
+      shown=$lines
+      quiet_since=$SECONDS
+    elif (( SECONDS - quiet_since >= 5 )); then
+      echo "  ...still starting ($((SECONDS - started)) s)"
+      quiet_since=$SECONDS
+    fi
     if port_in_use "$port"; then
-      echo "$APP_TITLE started (PID $(cat "$PID_FILE")) at http://localhost:$port"
+      echo "$APP_TITLE started in $((SECONDS - started)) s (PID $(cat "$PID_FILE")) at http://localhost:$port"
+      if grep -q 'downloading the latest release in the background' "$LOG_FILE" \
+          && ! grep -q -E '^ExifTool [0-9]+\.[0-9]+ installed' "$LOG_FILE"; then
+        echo "ExifTool is still downloading in the background; Exif Info uses its basic reader until it's done (follow it: $0 logs)."
+      fi
       return 0
     fi
     if ! running_pid >/dev/null; then
-      echo "$APP_TITLE failed to start. Last log lines:" >&2
-      tail -n 20 "$LOG_FILE" >&2
+      sed -n "$((shown + 1)),\$p" "$LOG_FILE" | show_log_lines >&2
+      echo "$APP_TITLE failed to start; the log above says why (all of it: $0 logs)." >&2
       return 1
     fi
     sleep 0.25
   done
-  echo "$APP_TITLE is running but not yet listening on port $port; check: $0 logs" >&2
+  echo "$APP_TITLE is running but not yet listening on port $port after $START_TIMEOUT_SECS s; check: $0 logs" >&2
+}
+
+# Log lines for the console: indented, without blank lines and the startup
+# banner's box (the "started ... at http://..." line says the same)
+show_log_lines() {
+  grep -v -e '^[[:space:]]*$' -e '[╔╚║═]' | sed 's/^/  /'
 }
 
 stop() {
@@ -90,6 +113,7 @@ stop() {
     echo "$APP_TITLE is not running."
     return 0
   fi
+  echo "Stopping $APP_TITLE (PID $pid)..."
   kill "$pid"
   for _ in $(seq 1 20); do
     kill -0 "$pid" 2>/dev/null || break
