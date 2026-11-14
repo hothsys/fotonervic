@@ -16,6 +16,7 @@ from backend.blur.quality_model import quality_model_status, start_quality_model
 from backend.blur.scan import blur_scan_gen, blur_state
 from backend.config import APP_DIR, APP_NAME, APP_TITLE
 from backend.exif import exif_scan_gen, exif_state
+from backend.exiftool import exiftool_status, start_exiftool_download
 from backend.formats import JPEG_EXTS, RAW_EXTS
 from backend.integrity import check_integrity
 from backend.jobs import _cancel_job, _finish_job, _start_job
@@ -100,6 +101,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
                 self._handle_integrity()
             elif path == '/api/quality-model':
                 self._send_json(quality_model_status())
+            elif path == '/api/exiftool':
+                self._send_json(exiftool_status())
             elif path == '/api/exif-scan':
                 self._handle_exif_scan()
             elif path == '/api/thumbnail':
@@ -128,6 +131,9 @@ class ScannerHandler(SimpleHTTPRequestHandler):
             elif path == '/api/quality-model/download':
                 start_quality_model_download()
                 self._send_json(quality_model_status())
+            elif path == '/api/exiftool/download':
+                start_exiftool_download()
+                self._send_json(exiftool_status())
             elif path == '/api/reveal':
                 self._handle_reveal()
             elif path == '/api/extract-preview':

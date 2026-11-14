@@ -13,14 +13,27 @@ Foto Nerve Shatter doesn't keep an application log of its own. What the server p
 
 ## What's in it
 
-- **Startup**: the banner with the app title and URL.
-- **Dependency install**: packages installed on first run, and a note if the optional onnxruntime install failed.
+- **Setup**, with timings: creating `.venv` (first launch), installing uv, which packages were installed and how long it took, or "Dependencies up to date." when nothing changed.
+- **ExifTool**: "ExifTool 13.63 ready.", or why it's being downloaded and the outcome ("ExifTool 13.63 installed (4.5 s)." or the failure and its cause, with up to two automatic retries).
+- **Startup**: "Starting the web server on port …" and the banner with the app title and URL.
 - **Library warnings**: e.g. LibRaw's `data corrupted at ...` lines when a thumbnail or Blur Check decodes a damaged RAW file. (The integrity check captures LibRaw's output itself to compute the corruption percentage, so those lines don't appear for Scan Directory.)
 - **Errors**: Python tracebacks if something fails unexpectedly.
 
 HTTP request lines (the standard `http.server` access log) are deliberately suppressed. Scan results aren't logged; use each scan's **Export CSV** for a record.
 
-If the server fails to start, `server.sh start` prints the last 20 lines of `.server.log`.
+## What `server.sh` shows
+
+`./server.sh start` (and `restart`) shows the log as the server starts, indented under its own messages, so you can see setup progress instead of a silent wait:
+
+```
+Starting Foto Nerve Shatter on port 5900 (log: .server.log)...
+  ExifTool 13.63 ready.
+  Dependencies up to date.
+  Starting the web server on port 5900...
+Foto Nerve Shatter started in 1 s (PID 6714) at http://localhost:5900
+```
+
+During a long quiet step it prints `...still starting (N s)` every 5 seconds. If ExifTool is still downloading when the server is up, it says so (the download finishes in the background; `./server.sh logs` shows the result). If the server fails to start, it shows the rest of the log, which says why.
 
 ## Reading the log
 
