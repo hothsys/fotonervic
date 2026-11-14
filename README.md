@@ -40,6 +40,8 @@ with thumbnail previews across an entire directory.
 | Other | `.webp` `.bmp` `.gif` |
 | Video | `.mp4` `.m4v` `.mov` `.avi` `.mpg` `.mpeg` |
 
+How each format is checked: [Supported formats](docs/supported-formats.md).
+
 ## Starting and Stopping
 
 Foto Nerve Shatter runs as a local web server at [http://localhost:5900](http://localhost:5900) and opens your browser when it starts. Missing dependencies are installed automatically on first run, so the first launch can take a minute.
@@ -57,7 +59,7 @@ Double-click **`FotoNerveShatter.app`** in the project folder. Foto Nerve Shatte
 - **To stop it or reopen the browser:** double-click FotoNerveShatter.app again. A dialog says Foto Nerve Shatter is already running and offers **Open in Browser** or **Stop Foto Nerve Shatter**. If you keep another copy of the project and launch the app from there, it detects the running instance on the configured port and shows the same dialog.
 - **Dock shortcut:** drag FotoNerveShatter.app onto the Dock. Keep the app itself in the project folder, because it uses `server.sh` next to it.
 
-Prefer a visible log? Double-click **FotoNerveShatter.command** instead; it runs Foto Nerve Shatter in a Terminal window, and pressing Return there stops it. You can also use the `server.sh` commands below.
+Prefer a Terminal window? Double-click **FotoNerveShatter.command** instead; it starts Foto Nerve Shatter from a Terminal window, and pressing Return there stops it. You can also use the `server.sh` commands below (`./server.sh logs` follows the server log; see [Logging](docs/logging.md)).
 
 ### Linux
 
@@ -86,19 +88,19 @@ Leave the window open while you use Foto Nerve Shatter, and press **Ctrl+C** in 
 
 ## Requirements
 
-- Python 3.8+
-- Pillow >= 10.0.0
-- numpy >= 1.24 (Blur Check)
-- onnxruntime >= 1.17 (optional: Blur Check's AI quality model; installed automatically)
+- Python 3.10+
+- Pillow
+- numpy (Blur Check)
+- onnxruntime (optional: Blur Check's AI quality model)
 
 No external web framework is needed; it uses Python's built-in `http.server`.
 
-Optional (installed automatically if available):
+Optional, but installed automatically along with the rest:
 
-- **rawpy >= 0.18.0**: full RAW format support (NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW)
-- **pillow-heif >= 0.13.0**: HEIC/HEIF support (iPhone photos)
+- **rawpy**: full RAW format support (NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW)
+- **pillow-heif**: HEIC/HEIF support (iPhone photos)
 
-Or install everything manually:
+Minimum versions are in [`requirements.txt`](requirements.txt). To install everything manually:
 
 ```bash
 pip install -r requirements.txt
@@ -114,6 +116,8 @@ pip install -r requirements.txt
 | **Empty** | File is 0 bytes. |
 | **Unsupported** | Format requires an optional library that isn't installed. |
 | **Error** | Permission denied or unexpected I/O error. |
+
+How each status is decided, and the corruption percentage: [Issue types](docs/issue-types.md).
 
 ## Recovery Techniques
 
@@ -135,6 +139,8 @@ For **corrupt** JPEGs where the beginning of the file has been zeroed out (missi
 
 For **RAW files** that can't be fully decoded, extracts the embedded JPEG preview that most cameras store inside the RAW container. This is typically a full-resolution JPEG that the camera generated at capture time.
 
+More detail, including which action fits which status: [Recovery techniques](docs/recovery.md).
+
 ## EXIF Info
 
 Click **Exif Info** to scan every image and video in a directory for metadata. Results appear as a card grid grouped by folder. Each card shows:
@@ -150,12 +156,15 @@ Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder
 
 Each file also gets the same integrity check as Scan Directory: damaged files get a red **Damaged** tag (hover for the exact problem), are counted in the summary, and the CSV export includes Integrity columns. The check fully decodes every file, including RAW sensor data, so Exif Info is slower on RAW-heavy folders (125 NEFs: about 60 seconds instead of 15).
 
+How metadata and thumbnails are read: [EXIF Info](docs/exif.md).
+
 ## Blur Check
 
 Click **Blur Check** to score every photo in a directory for blur. Results appear as a thumbnail grid grouped by folder, blurriest first, each with a blur score from **0 (sharp)** to **100 (very blurry)**.
 
 - **Blur threshold slider:** photos scoring at or above it count as blurry; by default only those are shown. Moving it re-filters instantly (no rescan), and the setting is remembered. **Default** resets it to 50.
 - **Show all photos** lists every photo, with the blurry ones outlined in red.
+- **Score colors:** green below 15, yellow from 15 to 49, red at 50 or above (fixed bands, whatever the slider is set to).
 - **Low detail** marks photos with too little texture to judge focus (fog, sky, plain walls).
 - **Export CSV** saves every photo's score, its components, and whether it's blurry at the current threshold.
 
@@ -186,7 +195,7 @@ The 146 MB model is too big for git, so it's distributed as a GitHub release fil
 2. Create a GitHub release tagged `quality-model-v1` and attach `models/clipiqa_plus_rn50.onnx` and `models/MODEL_LICENSE.md`.
 3. `QUALITY_MODEL_URL` in `app.conf` already points at that release file.
 
-**Limitations:** neither measurement knows what you *meant* to focus on, so a photo with the background in focus and the subject soft can count as sharp. Intentional softness (long-exposure water, mist, haze) can score as blurry. The calibration rests on a small labelled set (six photos) plus one large library, so if the default doesn't match your eye, the slider is the fix. RAW files are scored from their embedded full-size preview when there is one. When the preview is too small (e.g. iPhone DNGs), a same-name JPEG/HEIC saved alongside it (RAW+JPEG shooting) is scored instead; without one, the sensor data is decoded and lightly sharpened to approximate the camera's processing. The card's tooltip says which was used.
+**Limitations:** neither measurement knows what you *meant* to focus on, so a photo with the background in focus and the subject soft can count as sharp. Intentional softness (long-exposure water, mist, haze) can score as blurry. The calibration rests on a small set of photos the owner judged (41 from 11 cameras) plus one large library, so if the default doesn't match your eye, the slider is the fix. RAW files are scored from their embedded full-size preview when there is one. When the preview is too small (e.g. iPhone DNGs), a same-name JPEG/HEIC saved alongside it (RAW+JPEG shooting) is scored instead; without one, the sensor data is decoded and lightly sharpened to approximate the camera's processing. The card's tooltip says which was used.
 
 ## How It Works
 
@@ -206,6 +215,19 @@ The backend is a Python HTTP server (built on `http.server`, no framework) with 
 The frontend is `index.html`, `css/styles.css`, and plain scripts in `js/`, one per feature (`scan.js`, `exif.js`, `blur.js`, `browse.js`, `history.js`, `recovery.js`, `mount.js`), with shared helpers in `core.js` and startup in `main.js`. No build step, no node_modules, no framework dependencies.
 
 Scan results stream to the browser in real time via SSE. Each file is validated by a format-specific checker that examines container structure (headers, markers, atoms) and attempts a full Pillow decode. Previous scans are persisted to IndexedDB (last 10) and listed in the Previous scans dropdown; picking one loads it.
+
+Module responsibilities, every API endpoint, and the concurrency model: [Architecture](docs/architecture.md).
+
+## Documentation
+
+| Doc | Covers |
+|---|---|
+| [Architecture](docs/architecture.md) | Code layout (backend modules, frontend scripts), startup, API endpoints, request flow, concurrency, privacy |
+| [Supported formats](docs/supported-formats.md) | Which extensions are scanned, how each format family is validated, optional libraries, adding a format |
+| [Issue types](docs/issue-types.md) | What each status means, how it's decided, RAW tail damage, corruption percentage |
+| [Recovery techniques](docs/recovery.md) | Repair JPEG, Salvage Image, and Export Preview in detail |
+| [EXIF Info](docs/exif.md) | What the cards show, the integrity check, how metadata and thumbnails are read, CSV export |
+| [Logging](docs/logging.md) | Where the server's output goes and how to read it |
 
 ## License
 
