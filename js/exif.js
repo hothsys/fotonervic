@@ -114,7 +114,7 @@ function addExifCard(ev) {
 
   const thumbHtml = isVideo
     ? `<div class="exif-card-thumb exif-card-thumb-video" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="exif-card-vidext">${escHtml(ev.ext.replace('.','').toUpperCase())}</span></div>`
-    : `<div class="exif-card-thumb" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbUrl)}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>`;
+    : `<div class="exif-card-thumb" data-lightbox="${escHtml(ev.filepath)}" title="Preview"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbUrl)}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>`;
 
   card.innerHTML = `
     ${thumbHtml}
