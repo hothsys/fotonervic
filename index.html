@@ -254,6 +254,21 @@
 
 </main>
 
+<!-- Lightbox: full-screen photo preview (js/lightbox.js) -->
+<div id="lightbox">
+  <div id="lb-stage"><img id="lb-img" alt=""></div>
+  <div id="lb-spinner"></div>
+  <div id="lb-error">This photo can’t be previewed.</div>
+  <div id="lb-toolbar">
+    <span id="lb-counter"></span>
+    <button class="lb-btn" onclick="revealFile(lbPath(lbIndex))" title="Reveal in file manager" aria-label="Reveal in file manager"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></button>
+    <button class="lb-btn" onclick="closeLightbox()" title="Close (Esc)" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <button class="lb-btn lb-nav" id="lb-prev" onclick="lightboxNav(-1)" title="Previous (←)" aria-label="Previous"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <button class="lb-btn lb-nav" id="lb-next" onclick="lightboxNav(1)" title="Next (→)" aria-label="Next"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+  <div id="lb-caption"></div>
+</div>
+
 <script src="/js/core.js"></script>
 <script src="/js/browse.js"></script>
 <script src="/js/history.js"></script>
@@ -261,6 +276,7 @@
 <script src="/js/scan.js"></script>
 <script src="/js/exif.js"></script>
 <script src="/js/blur.js"></script>
+<script src="/js/lightbox.js"></script>
 <script src="/js/mount.js"></script>
 <script src="/js/main.js"></script>
 </body>

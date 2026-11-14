@@ -27,6 +27,7 @@ with thumbnail previews across an entire directory.
 - **CSV export** of scan results, EXIF data, and blur scores
 - **Directory browser** with breadcrumb navigation
 - **Reveal in Finder/Explorer**: jump to any file from the UI
+- **Lightbox preview**: click a photo's thumbnail in Exif Info or Blur Check to view it full screen (RAW and HEIC included), step through photos with the arrow keys, and click to zoom to 100% to check focus
 
 ## Supported Formats
 
@@ -152,7 +153,7 @@ Click **Exif Info** to scan every image and video in a directory for metadata. R
 - Image dimensions and file size
 - GPS coordinates (clickable link to Google Maps, when available)
 
-Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder icon. Click a thumbnail or filename to reveal the file in Finder / Explorer.
+Supports JPEG, PNG, HEIC, TIFF, WebP, and RAW formats. Videos show a placeholder icon. Click a photo's thumbnail to preview it in the lightbox (see [Lightbox preview](#lightbox-preview)); click a filename, or a video's thumbnail, to reveal the file in Finder / Explorer.
 
 Each file also gets the same integrity check as Scan Directory: damaged files get a red **Damaged** tag (hover for the exact problem), are counted in the summary, and the CSV export includes Integrity columns. The check fully decodes every file, including RAW sensor data, so Exif Info is slower on RAW-heavy folders (125 NEFs: about 60 seconds instead of 15).
 
@@ -167,6 +168,7 @@ Click **Blur Check** to score every photo in a directory for blur. Results appea
 - **Score colors:** green below 15, yellow from 15 to 49, red at 50 or above (fixed bands, whatever the slider is set to).
 - **Low detail** marks photos with too little texture to judge focus (fog, sky, plain walls).
 - **Export CSV** saves every photo's score, its components, and whether it's blurry at the current threshold.
+- **Preview:** click a thumbnail to check a photo full screen and zoom in to 100% (see [Lightbox preview](#lightbox-preview)); the caption shows its blur score.
 
 ### AI-assisted scoring
 
@@ -197,6 +199,17 @@ The 146 MB model is too big for git, so it's distributed as a GitHub release fil
 
 **Limitations:** neither measurement knows what you *meant* to focus on, so a photo with the background in focus and the subject soft can count as sharp. Intentional softness (long-exposure water, mist, haze) can score as blurry. The calibration rests on a small set of photos the owner judged (41 from 11 cameras) plus one large library, so if the default doesn't match your eye, the slider is the fix. RAW files are scored from their embedded full-size preview when there is one. When the preview is too small (e.g. iPhone DNGs), a same-name JPEG/HEIC saved alongside it (RAW+JPEG shooting) is scored instead; without one, the sensor data is decoded and lightly sharpened to approximate the camera's processing. The card's tooltip says which was used.
 
+## Lightbox Preview
+
+Click a photo's thumbnail in Exif Info or Blur Check to view it full screen. Browsers can't display RAW files (or HEIC/TIFF in Chrome), so the server renders an upright JPEG of each photo: for RAW files, from the camera's embedded preview (full resolution on most cameras), a same-name JPEG/HEIC saved alongside it, or the sensor data, in that order.
+
+- **Arrow keys** (or the ‹ › buttons) step through the photos visible in that section, in their current order; **Escape** or a click on the dark background closes.
+- **Click** the photo to zoom to 100%, the way you'd check focus before culling; the full-resolution version loads only then. Scroll or drag to pan; click again or press **Escape** to zoom back out. Photos already shown at their actual size (e.g. small images) can't be zoomed, so they show no zoom cursor and the caption says *100%*.
+- The caption shows the filename, blur score (in Blur Check), a **Damaged** tag if the file failed its integrity check, and, at 100%, the full-resolution size. The folder button reveals the photo in Finder / Explorer.
+- Videos aren't previewed; their thumbnail reveals the file instead.
+
+Previews are cached in memory (up to 256 MB) and in the browser for a day; **Clear Cache** under the settings cog empties both.
+
 ## How It Works
 
 The backend is a Python HTTP server (built on `http.server`, no framework) with a thread pool (4 workers) for parallel file checking. `app.py` is only the entry point: it installs missing dependencies and starts the server. The application lives in `backend/`:
@@ -209,10 +222,11 @@ The backend is a Python HTTP server (built on `http.server`, no framework) with 
 | `exif.py`, `thumbnails.py` | EXIF extraction and the Exif Info scan; card thumbnails |
 | `blur/` | Blur Check: `calibration.py` (every tunable number), `loading.py`, `sharpness.py`, `quality_model.py`, `score.py`, `scan.py` |
 | `tiff.py` | TIFF structure parsing and embedded RAW preview extraction |
+| `preview.py` | Lightbox previews: upright JPEGs at screen size or full resolution |
 | `repair.py` | JPEG salvage |
 | `config.py`, `formats.py`, `jobs.py` | Paths and `app.conf`, supported extensions, scan cancellation |
 
-The frontend is `index.html`, `css/styles.css`, and plain scripts in `js/`, one per feature (`scan.js`, `exif.js`, `blur.js`, `browse.js`, `history.js`, `recovery.js`, `mount.js`), with shared helpers in `core.js` and startup in `main.js`. No build step, no node_modules, no framework dependencies.
+The frontend is `index.html`, `css/styles.css`, and plain scripts in `js/`, one per feature (`scan.js`, `exif.js`, `blur.js`, `lightbox.js`, `browse.js`, `history.js`, `recovery.js`, `mount.js`), with shared helpers in `core.js` and startup in `main.js`. No build step, no node_modules, no framework dependencies.
 
 Scan results stream to the browser in real time via SSE. Each file is validated by a format-specific checker that examines container structure (headers, markers, atoms) and attempts a full Pillow decode. Previous scans are persisted to IndexedDB (last 10) and listed in the Previous scans dropdown; picking one loads it.
 
@@ -226,9 +240,9 @@ Module responsibilities, every API endpoint, and the concurrency model: [Archite
 | [Supported formats](docs/supported-formats.md) | Which extensions are scanned, how each format family is validated, optional libraries, adding a format |
 | [Issue types](docs/issue-types.md) | What each status means, how it's decided, RAW tail damage, corruption percentage |
 | [Recovery techniques](docs/recovery.md) | Repair JPEG, Salvage Image, and Export Preview in detail |
-| [EXIF Info](docs/exif.md) | What the cards show, the integrity check, how metadata and thumbnails are read, CSV export |
+| [EXIF Info](docs/exif.md) | What the cards show, the integrity check, how metadata, thumbnails, and lightbox previews are read, CSV export |
 | [Logging](docs/logging.md) | Where the server's output goes and how to read it |
 
 ## License
 
-MIT
+MIT. The AI quality model is non-commercial only (see [AI-assisted scoring](#ai-assisted-scoring)).

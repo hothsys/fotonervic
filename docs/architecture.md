@@ -34,6 +34,7 @@ Modules import each other absolutely (`from backend.x import ...`).
 | `scan.py` | Scan Directory (`scan_directory_gen`) and the pre-scan media count (`count_media_gen`) |
 | `exif.py` | EXIF extraction, orientation, and the Exif Info scan (`exif_scan_gen`) |
 | `thumbnails.py` | Card thumbnails with an in-memory LRU cache |
+| `preview.py` | Lightbox previews: upright JPEGs at screen size (2560 px) or full resolution, from the same sources Blur Check scores (RAW embedded preview, companion JPEG/HEIC, sensor data), with a size-capped cache |
 | `blur/` | Blur Check: `calibration.py` (every tunable number), `loading.py`, `sharpness.py`, `quality_model.py`, `score.py` (`measure_blur`), `scan.py` (`blur_scan_gen`) |
 | `tiff.py` | TIFF structure parsing for NEF/ARW and embedded preview extraction |
 | `repair.py` | JPEG salvage (`salvage_jpeg`) |
@@ -54,6 +55,7 @@ Plain global scripts (no build step, no ES modules), loaded in order by `index.h
 | `scan.js` | Scan Directory (SSE), results rendering, filtering, folder toggle, CSV export |
 | `exif.js` | Exif Info (SSE), lazy-loaded thumbnail card grid, CSV export |
 | `blur.js` | Blur Check (SSE), cards, threshold slider, AI model status and download, CSV export |
+| `lightbox.js` | Full-screen preview of image cards (plain JS, markup in `index.html`): steps through the visible cards, screen-size image with click-to-zoom to the full-resolution one, caption and Reveal button |
 | `mount.js` | Volume mount/unmount watcher |
 | `main.js` | Click delegation for result rows and cards, and startup (loads last) |
 
@@ -75,6 +77,7 @@ Scan Directory, Exif Info, and Blur Check are generators that walk a directory, 
 | GET | `/api/count?dir=` | SSE: how many photos and videos a scan of the directory would process |
 | GET | `/api/integrity?path=` | Integrity check of one file |
 | GET | `/api/thumbnail?path=` | JPEG thumbnail, generated on demand and cached (LRU, 1000 entries) |
+| GET | `/api/preview?path=[&full=1]` | Lightbox: upright JPEG at screen size, or full resolution with `full=1` |
 | GET | `/api/export` | CSV of the last Scan Directory's issues |
 | GET | `/api/browse?path=` | Directory listing for the folder browser |
 | GET | `/api/libs` | Which imaging libraries (Pillow, rawpy, pillow-heif) are available |
@@ -88,7 +91,7 @@ Scan Directory, Exif Info, and Blur Check are generators that walk a directory, 
 | POST | `/api/extract-preview` | Extract the embedded JPEG preview from a RAW file |
 | POST | `/api/repair-jpeg` | Re-encode a truncated JPEG cleanly |
 | POST | `/api/salvage-image` | Reconstruct a JPEG with a destroyed header |
-| POST | `/api/clear-cache` | Empty the thumbnail cache and the browser's HTTP cache for the app |
+| POST | `/api/clear-cache` | Empty the thumbnail and preview caches and the browser's HTTP cache for the app |
 
 ## Request flow
 
@@ -99,6 +102,7 @@ Browser ──/api/count─────────► shows how many files a sc
         ──/api/exif-scan─────► streams metadata cards
         ──/api/blur-scan─────► streams blur scores
         ──/api/thumbnail─────► lazy, only for cards scrolled into view
+        ──/api/preview───────► lightbox: screen size, then full resolution on zoom
         ──/api/repair-jpeg───► returns a downloadable repaired file
 ```
 

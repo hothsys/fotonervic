@@ -19,6 +19,7 @@ from backend.exif import exif_scan_gen, exif_state
 from backend.formats import JPEG_EXTS, RAW_EXTS
 from backend.integrity import check_integrity
 from backend.jobs import _cancel_job, _finish_job, _start_job
+from backend.preview import clear_preview_cache, get_preview
 from backend.repair import salvage_jpeg
 from backend.scan import count_media_gen, count_state, scan_directory_gen, scan_state
 from backend.thumbnails import (
@@ -103,6 +104,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
                 self._handle_exif_scan()
             elif path == '/api/thumbnail':
                 self._handle_thumbnail()
+            elif path == '/api/preview':
+                self._handle_preview()
             elif path in ('/', '/index.html'):
                 self._handle_index()
             else:
@@ -221,14 +224,34 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_preview(self):
+        params = self._query_params()
+        filepath = params.get('path', [''])[0].strip()
+        full = params.get('full', ['0'])[0] == '1'
+        if not filepath or not os.path.isfile(filepath):
+            self.send_error(404)
+            return
+        try:
+            data = get_preview(filepath, full)
+        except Exception:
+            self.send_error(422)
+            return
+        self.send_response(200)
+        self.send_header('Content-Type', 'image/jpeg')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'public, max-age=86400')
+        self.end_headers()
+        self.wfile.write(data)
+
     def _handle_clear_cache(self):
-        """Empty the server's thumbnail cache and tell the browser to drop its
+        """Empty the server's thumbnail and preview caches and tell the browser to drop its
         HTTP cache for this origin. Saved scans (IndexedDB) and localStorage
         are untouched: Clear-Site-Data "cache" covers only the HTTP cache."""
         with _thumbnail_lock:
             cleared = len(_thumbnail_cache)
             _thumbnail_cache.clear()
-        body = json.dumps({'ok': True, 'thumbnails_cleared': cleared}).encode()
+        previews = clear_preview_cache()
+        body = json.dumps({'ok': True, 'thumbnails_cleared': cleared, 'previews_cleared': previews}).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))

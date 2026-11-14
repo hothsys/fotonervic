@@ -49,6 +49,14 @@ document.addEventListener('click', function(e) {
     salvageImage(salvageTarget);
     return;
   }
+  // Open an image card's thumbnail in the lightbox
+  var lightboxTarget = e.target.closest('[data-lightbox]');
+  if (lightboxTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+    openLightbox(lightboxTarget);
+    return;
+  }
   // Reveal file/folder in OS file manager
   var revealTarget = e.target.closest('[data-reveal]');
   if (revealTarget) {

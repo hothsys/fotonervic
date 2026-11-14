@@ -113,7 +113,7 @@ function addBlurCard(ev) {
   if (ev.error)         tags.push(`<span class="blur-tag" title="${escHtml(ev.error)}">Unreadable</span>`);
 
   card.innerHTML = `
-    <div class="exif-card-thumb" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbnailUrl(ev.filepath))}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>
+    <div class="exif-card-thumb" data-lightbox="${escHtml(ev.filepath)}" title="Preview"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbnailUrl(ev.filepath))}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>
     <div class="exif-card-meta">
       <a class="exif-card-filename card-filename-link" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
       <div class="blur-card-tags">
