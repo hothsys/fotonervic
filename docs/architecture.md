@@ -67,7 +67,7 @@ Zero configuration. `app.py` runs the app in its own virtual environment, `.venv
 
 ## Scans
 
-Scan Directory, Exif Info, and Blur Check are generators that walk a directory, check files with a `ThreadPoolExecutor` (`WORKER_THREADS`, 4, in batches of 16), and yield events that the server streams to the browser as Server-Sent Events. Exif Info and Blur Check run the same integrity check as Scan Directory on every file and merge its result into theirs.
+Scan Directory, Exif Info, and Blur Check are generators that walk a directory, check files on a pool of `WORKER_THREADS` (4) threads kept continuously busy (`run_in_threads` in `jobs.py`: two files per thread in flight, a new one started as soon as any finishes), and yield events that the server streams to the browser as Server-Sent Events. Exif Info and Blur Check run the same integrity check as Scan Directory on every file and merge its result into theirs.
 
 ## API endpoints
 
@@ -114,7 +114,7 @@ CSV exports are built in the browser from the results already on the page.
 
 ## Concurrency model
 
-`ThreadingHTTPServer` handles each connection on its own thread; scans fan out further with a `ThreadPoolExecutor`. Each scan type has one state object, and starting a scan cancels the previous one of the same type; the frontend's busy lock also disables the other scan buttons while one runs. RAW integrity checks briefly redirect process-wide stderr (to capture LibRaw's corruption offset) under a lock, so they're serialized. The AI model limits its own thread count so four parallel photos don't oversubscribe the CPU.
+`ThreadingHTTPServer` handles each connection on its own thread; scans fan out further with a `ThreadPoolExecutor`. Each scan type has one state object, and starting a scan cancels the previous one of the same type; the frontend's busy lock also disables the other scan buttons while one runs. RAW integrity checks run in a pool of 4 worker processes (`backend/integrity/__init__.py`): decoding sensor data takes 0.1 to 2 s per file, and capturing LibRaw's corruption offset means redirecting stderr, which is process-wide, so in threads they'd run one at a time. Each worker has its own stderr, so they run in parallel (about 4x faster on RAW-heavy folders). The pool is checked with a ping when it starts (if processes don't work, checks run in-process); a worker that crashes on a damaged file only takes down itself (the file is retried alone before being reported as crashing the decoder); workers exit when the server does, however it ends. The check only unpacks (decompresses) the sensor data, which is where LibRaw finds damage; it doesn't demosaic. The AI model limits its own thread count so four parallel photos don't oversubscribe the CPU.
 
 ## Privacy
 

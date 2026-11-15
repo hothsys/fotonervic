@@ -22,6 +22,7 @@ ExifTool downloads at the same time (backend/exiftool.py).
 
 import hashlib
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -168,8 +169,11 @@ if __name__ == '__main__':
     threading.Timer(1.2, lambda: webbrowser.open(f'http://localhost:{port}')).start()
     ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer(('127.0.0.1', port), ScannerHandler)
+    # server.sh stop sends SIGTERM, which by default ends Python without any
+    # clean-up; exit normally instead, so worker processes are shut down too
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print('\nShutting down.')
         server.server_close()

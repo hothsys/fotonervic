@@ -24,7 +24,7 @@ JPEG, PNG, HEIC, TIFF, WebP, and RAW formats are read for metadata. Videos are l
 
 Every file also gets the same integrity check as Scan Directory. Damaged files are tagged on their card and counted in the summary and folder headers, and the CSV export includes Integrity columns. `Unsupported` means the file couldn't be checked, not that it's damaged; see [Issue types](issue-types.md).
 
-The check fully decodes every file, including RAW sensor data, so Exif Info is slower on RAW-heavy folders (125 NEFs: about 60 seconds instead of 15).
+The check decompresses every file, including RAW sensor data, so it's the slowest part of Exif Info on RAW-heavy folders; RAW files are checked four at a time in separate processes (e.g. 20 iPhone 17 Pro ProRAW DNGs: about 8 seconds; 40 Nikon D810 NEFs: about 5).
 
 ## How it works
 
