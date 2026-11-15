@@ -63,11 +63,11 @@ def check_raw(filepath: str):
                 os.close(tmp_fd)
                 try:
                     with rawpy.imread(filepath) as raw:
-                        _ = raw.postprocess(
-                            half_size=True,
-                            use_camera_wb=True,
-                            output_bps=8,
-                        )
+                        # Decompress (unpack) the sensor data: that's where
+                        # LibRaw finds damage. Demosaicing (postprocess) works
+                        # on already-decoded data, catches nothing more, and
+                        # adds ~0.45 s per iPhone ProRAW file.
+                        _ = raw.raw_image
                 finally:
                     os.dup2(old_stderr, 2)
                     os.close(old_stderr)

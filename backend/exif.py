@@ -4,10 +4,9 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from backend.config import WORKER_THREADS
+from backend.jobs import run_in_threads
 from backend.exiftool import read_metadata
 from backend.formats import HEIC_EXTS, RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
@@ -448,49 +447,33 @@ def exif_scan_gen(root_dir: str, cancel: threading.Event):
         exif.update(check_integrity(filepath))
         return dp, fname, filepath, file_size, exif
 
-    batch_size = WORKER_THREADS * 4
-    for batch_start in range(0, total, batch_size):
+    # Check files on a pool of worker threads, kept busy (backend/jobs.py)
+    for dp, fname, filepath, file_size, exif in run_in_threads(_exif_worker, all_files, cancel):
         if cancel.is_set():
             yield {'type': 'cancelled', 'scanned': scanned}
             return
+        scanned += 1
 
-        batch = all_files[batch_start:batch_start + batch_size]
+        yield {
+            'type':    'scanning',
+            'file':    fname,
+            'dir':     dp,
+            'scanned': scanned,
+            'total':   total,
+        }
 
-        with ThreadPoolExecutor(max_workers=WORKER_THREADS) as executor:
-            futures = {
-                executor.submit(_exif_worker, dp, fname): (dp, fname)
-                for dp, fname in batch
-            }
-
-            for future in as_completed(futures):
-                if cancel.is_set():
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    yield {'type': 'cancelled', 'scanned': scanned}
-                    return
-
-                dp, fname, filepath, file_size, exif = future.result()
-                scanned += 1
-
-                yield {
-                    'type':    'scanning',
-                    'file':    fname,
-                    'dir':     dp,
-                    'scanned': scanned,
-                    'total':   total,
-                }
-
-                event = {
-                    'type':      'exif_result',
-                    'filepath':  filepath,
-                    'filename':  fname,
-                    'dir':       dp,
-                    'ext':       Path(fname).suffix.lower(),
-                    'file_size': file_size,
-                    'scanned':   scanned,
-                    'total':     total,
-                    **exif,
-                }
-                yield event
+        event = {
+            'type':      'exif_result',
+            'filepath':  filepath,
+            'filename':  fname,
+            'dir':       dp,
+            'ext':       Path(fname).suffix.lower(),
+            'file_size': file_size,
+            'scanned':   scanned,
+            'total':     total,
+            **exif,
+        }
+        yield event
 
     elapsed = time.time() - start
     yield {'type': 'complete', 'scanned': scanned, 'elapsed': round(elapsed, 1)}

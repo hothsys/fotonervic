@@ -3,11 +3,10 @@
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from backend.jobs import run_in_threads
 from backend.blur.score import measure_blur
-from backend.config import WORKER_THREADS
 from backend.formats import SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
 
@@ -57,45 +56,29 @@ def blur_scan_gen(root_dir: str, cancel: threading.Event):
         blur.update(check_integrity(filepath))
         return dp, fname, filepath, file_size, blur
 
-    batch_size = WORKER_THREADS * 4
-    for batch_start in range(0, total, batch_size):
+    # Check files on a pool of worker threads, kept busy (backend/jobs.py)
+    for dp, fname, filepath, file_size, blur in run_in_threads(_blur_worker, all_files, cancel):
         if cancel.is_set():
             yield {'type': 'cancelled', 'scanned': scanned}
             return
+        scanned += 1
 
-        batch = all_files[batch_start:batch_start + batch_size]
-
-        with ThreadPoolExecutor(max_workers=WORKER_THREADS) as executor:
-            futures = {
-                executor.submit(_blur_worker, dp, fname): (dp, fname)
-                for dp, fname in batch
-            }
-
-            for future in as_completed(futures):
-                if cancel.is_set():
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    yield {'type': 'cancelled', 'scanned': scanned}
-                    return
-
-                dp, fname, filepath, file_size, blur = future.result()
-                scanned += 1
-
-                yield {
-                    'type':    'scanning',
-                    'file':    fname,
-                    'dir':     dp,
-                    'scanned': scanned,
-                    'total':   total,
-                }
-                yield {
-                    'type':      'blur_result',
-                    'filepath':  filepath,
-                    'filename':  fname,
-                    'dir':       dp,
-                    'ext':       Path(fname).suffix.lower(),
-                    'file_size': file_size,
-                    **blur,
-                }
+        yield {
+            'type':    'scanning',
+            'file':    fname,
+            'dir':     dp,
+            'scanned': scanned,
+            'total':   total,
+        }
+        yield {
+            'type':      'blur_result',
+            'filepath':  filepath,
+            'filename':  fname,
+            'dir':       dp,
+            'ext':       Path(fname).suffix.lower(),
+            'file_size': file_size,
+            **blur,
+        }
 
     elapsed = time.time() - start
     yield {'type': 'complete', 'scanned': scanned, 'elapsed': round(elapsed, 1)}

@@ -4,10 +4,9 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from backend.config import WORKER_THREADS
+from backend.jobs import run_in_threads
 from backend.formats import RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
 from backend.tiff import _has_usable_preview
@@ -67,64 +66,47 @@ def scan_directory_gen(root_dir: str, cancel: threading.Event):
             has_preview = _has_usable_preview(filepath)
         return dp, fname, filepath, file_size, status, reason, has_preview
 
-    # Process files in batches using a thread pool
-    batch_size = WORKER_THREADS * 4
-    for batch_start in range(0, total, batch_size):
+    # Check files on a pool of worker threads, kept busy (backend/jobs.py)
+    for dp, fname, filepath, file_size, status, reason, has_preview in run_in_threads(_check_worker, all_files, cancel):
         if cancel.is_set():
             yield {'type': 'cancelled', 'scanned': scanned, 'issues': issues}
             return
+        scanned += 1
 
-        batch = all_files[batch_start:batch_start + batch_size]
+        yield {
+            'type':    'scanning',
+            'file':    fname,
+            'dir':     dp,
+            'scanned': scanned,
+            'total':   total,
+            'issues':  issues,
+        }
 
-        with ThreadPoolExecutor(max_workers=WORKER_THREADS) as executor:
-            futures = {
-                executor.submit(_check_worker, dp, fname): (dp, fname)
-                for dp, fname in batch
+        if status != 'ok':
+            issues += 1
+            # Extract corruption percentage from reason if present
+            corrupt_pct = None
+            if reason:
+                pct_m = re.search(r'~([\d.]+)% of file corrupted', reason)
+                if pct_m:
+                    corrupt_pct = float(pct_m.group(1))
+            event = {
+                'type':      'issue',
+                'filepath':  filepath,
+                'filename':  fname,
+                'dir':       dp,
+                'ext':       Path(fname).suffix.lower(),
+                'file_size': file_size,
+                'status':    status,
+                'reason':    reason,
+                'scanned':   scanned,
+                'issues':    issues,
             }
-
-            for future in as_completed(futures):
-                if cancel.is_set():
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    yield {'type': 'cancelled', 'scanned': scanned, 'issues': issues}
-                    return
-
-                dp, fname, filepath, file_size, status, reason, has_preview = future.result()
-                scanned += 1
-
-                yield {
-                    'type':    'scanning',
-                    'file':    fname,
-                    'dir':     dp,
-                    'scanned': scanned,
-                    'total':   total,
-                    'issues':  issues,
-                }
-
-                if status != 'ok':
-                    issues += 1
-                    # Extract corruption percentage from reason if present
-                    corrupt_pct = None
-                    if reason:
-                        pct_m = re.search(r'~([\d.]+)% of file corrupted', reason)
-                        if pct_m:
-                            corrupt_pct = float(pct_m.group(1))
-                    event = {
-                        'type':      'issue',
-                        'filepath':  filepath,
-                        'filename':  fname,
-                        'dir':       dp,
-                        'ext':       Path(fname).suffix.lower(),
-                        'file_size': file_size,
-                        'status':    status,
-                        'reason':    reason,
-                        'scanned':   scanned,
-                        'issues':    issues,
-                    }
-                    if corrupt_pct is not None:
-                        event['corrupt_pct'] = corrupt_pct
-                    if has_preview is not None:
-                        event['has_preview'] = has_preview
-                    yield event
+            if corrupt_pct is not None:
+                event['corrupt_pct'] = corrupt_pct
+            if has_preview is not None:
+                event['has_preview'] = has_preview
+            yield event
 
     elapsed = time.time() - start
     yield {
