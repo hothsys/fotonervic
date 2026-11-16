@@ -18,6 +18,7 @@ from backend.blur.calibration import (
     FINE_DETAIL_CUTOFF,
     FINE_DETAIL_MAX_QUALITY_Z,
     FINE_DETAIL_SCALE,
+    LOW_DETAIL_MAX_FRACTION,
 )
 from backend.blur.loading import _load_working_image_with_source, _normalize_exposure
 from backend.blur.quality_model import _quality_score
@@ -29,7 +30,7 @@ def measure_blur(filepath: str) -> dict:
     quality), method ('ai' or 'basic'), low_detail, and error (set when the
     image couldn't be read)."""
     result = {'blur_score': None, 'sharpness': None, 'quality': None, 'method': 'basic',
-              'low_detail': False, 'error': None, 'scored_from': None,
+              'low_detail': False, 'detail_fraction': None, 'error': None, 'scored_from': None,
               'fine_detail': None, 'fine_detail_flag': False}
     try:
         rgb, result['scored_from'] = _load_working_image_with_source(filepath)
@@ -46,7 +47,8 @@ def measure_blur(filepath: str) -> dict:
         return result
 
     rgb = _normalize_exposure(rgb)
-    sharpness = _hand_built_sharpness(rgb.convert('L'))
+    sharpness, detail_fraction = _hand_built_sharpness(rgb.convert('L'))
+    result['detail_fraction'] = round(detail_fraction, 3)
     try:
         quality = _quality_score(rgb)
     except Exception as e:
@@ -59,6 +61,8 @@ def measure_blur(filepath: str) -> dict:
         z_sharp = (math.log10(1 + sharpness) - CAL_SHARP_MEAN) / CAL_SHARP_STD
     else:
         result['low_detail'] = True      # fog, sky, blank wall: no edges to judge focus on
+    if detail_fraction < LOW_DETAIL_MAX_FRACTION:
+        result['low_detail'] = True      # mostly sky, silhouette, haze: too little detail to judge
 
     if quality is not None:
         result['quality'] = round(quality, 4)

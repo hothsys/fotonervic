@@ -161,8 +161,9 @@ Click **Blur Check** to score every photo in a directory for blur. Results appea
 - **Blur threshold slider:** photos scoring at or above it count as blurry; by default only those are shown. Moving it re-filters instantly (no rescan), and the setting is remembered. **Default** resets it to 50.
 - **Show all photos** lists every photo, with the blurry ones outlined in red.
 - **Score colours:** green below 15, yellow from 15 to 49, red at 50 or above (fixed bands, whatever the slider is set to).
-- **Low detail** marks photos with too little texture to judge focus (fog, sky, plain walls).
-- **Export CSV** saves every photo's score, its components, and whether it's blurry at the current threshold.
+- **ⓘ on each score:** click it to see what the score means at your current threshold and what it was based on: the AI quality rating, the sharpness measure, how much of the frame has detail, and anything that raised the score (very little fine detail) or changed how it was measured (a RAW scored from its JPEG companion). A damaged file's pop-out says the score covers only the readable part.
+- **Low detail:** photos that are mostly smooth sky, silhouette, haze, or plain surfaces (a moon, a sunrise over a ridge, fog) have too little detail to judge focus and can score high even when perfectly sharp. When under 20% of the frame has detail, the photo gets a grey **Low detail** tag whose ⓘ explains why and what the score was based on, its score turns grey (for reference only), and it never counts as blurry: it's listed under **Show all photos**, sorted last, and counted separately in the summary. Check these by eye in the preview at 100%.
+- **Export CSV** saves every photo's score, its components (including Low Detail and Detail %), and whether it's blurry at the current threshold.
 - **Preview:** click a thumbnail to check a photo full screen and zoom in to 100% (see [Lightbox preview](#lightbox-preview)); the caption shows its blur score.
 
 ### AI-assisted scoring

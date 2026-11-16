@@ -60,7 +60,8 @@ function lightboxCaptionHtml(size) {
   const r = card.blurResult;
   const parts = [`<span class="lb-filename">${escHtml(lbPath(lbIndex).split('/').pop())}</span>`];
   if (r && r.blur_score != null) {
-    parts.push(`<span class="blur-badge ${blurBadgeClass(r.blur_score)}">Blur ${Math.round(r.blur_score)}</span>`);
+    parts.push(`<span class="blur-badge ${r.low_detail ? 'unjudged' : blurBadgeClass(r.blur_score)}">Blur ${Math.round(r.blur_score)}</span>`);
+    if (r.low_detail) parts.push('<span class="blur-tag">Low detail</span>');
   }
   if (r && isDamaged(r)) parts.push(integrityTagHtml(r));
   if (size) parts.push(`<span class="lb-dims">${size}</span>`);

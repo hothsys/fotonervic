@@ -21,7 +21,8 @@ let blurCounts = { blurry: 0, low: 0, damaged: 0 };
 
 // Compared as displayed (whole numbers), so a card showing 50 counts at threshold 50
 function isBlurry(r) {
-  return r.blur_score != null && Math.round(r.blur_score) >= blurThreshold;
+  // Low detail: too little detail to judge focus, so never counted as blurry
+  return r.blur_score != null && !r.low_detail && Math.round(r.blur_score) >= blurThreshold;
 }
 
 
@@ -104,12 +105,15 @@ function addBlurCard(ev) {
   if (ev.quality != null)   parts.push('AI quality: ' + Math.round(ev.quality * 100) + '%');
   if (ev.scored_from)       parts.push('Scored from ' + ev.scored_from);
   if (ev.fine_detail_flag)  parts.push('Very little fine detail (smeared or soft), so flagged');
+  if (ev.detail_fraction != null) parts.push(`Detail across ${Math.round(ev.detail_fraction * 100)}% of the frame`);
   card.title = parts.join('\n');
   card.blurResult = ev;
 
   const tags = [];
   if (isDamaged(ev))    tags.push(integrityTagHtml(ev));
-  if (ev.low_detail)    tags.push('<span class="blur-tag" title="Too little detail (fog, sky, plain surfaces) to judge focus. Never counted as blurry.">Low detail</span>');
+  // One ⓘ per card, beside (not inside) its badge: after the Low detail tag when
+  // there is one (that's what needs explaining first), else after the score badge
+  if (ev.low_detail)    tags.push('<span class="blur-tag">Low detail</span>' + blurInfoBubble('low_detail', 'Why low detail?'));
   if (ev.error)         tags.push(`<span class="blur-tag" title="${escHtml(ev.error)}">Unreadable</span>`);
 
   card.innerHTML = `
@@ -117,7 +121,7 @@ function addBlurCard(ev) {
     <div class="exif-card-meta">
       <a class="exif-card-filename card-filename-link" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
       <div class="blur-card-tags">
-        ${ev.blur_score != null ? `<span class="blur-badge ${blurBadgeClass(ev.blur_score)}">Blur ${Math.round(ev.blur_score)}</span>` : ''}
+        ${ev.blur_score != null ? `<span class="blur-badge ${ev.low_detail ? 'unjudged' : blurBadgeClass(ev.blur_score)}">Blur ${Math.round(ev.blur_score)}</span>${ev.low_detail ? '' : blurInfoBubble('blur_score', 'About this score')}` : ''}
         ${tags.join('')}
       </div>
       <div class="exif-card-size">${formatSize(ev.file_size || 0)}</div>
@@ -169,6 +173,56 @@ function upsertBlurFolderGroup(dir) {
   const refs = { group, grid, badge: header.querySelector('.fc-issue'), total: 0, blurry: 0, damaged: 0 };
   blurGroups.set(dir, refs);
   return refs;
+}
+
+// ⓘ bubble on a Blur Check card; its pop-out (js/exif.js) is built from the
+// card's result when opened, so it reflects the current threshold
+function blurInfoBubble(kind, label) {
+  return ` <span class="info-bubble" role="button" tabindex="0" aria-label="${label}" aria-expanded="false"`
+    + ` aria-controls="info-pop" data-note-kind="${kind}">i</span>`;
+}
+
+// Pop-out text for a score: what it means at the current threshold, then what it was based on
+function blurScoreHelp(r, withHeading) {
+  const score = Math.round(r.blur_score);
+  let html = '';
+  if (withHeading) {
+    if (isBlurry(r)) {
+      html += `<strong>Blur ${score}: counted as blurry</strong>`
+        + `<p>At or above your threshold of ${blurThreshold}. Check it yourself: open the photo and click it to zoom to 100%.</p>`;
+    } else if (score < BLUR_SHARP_BELOW) {
+      html += `<strong>Blur ${score}: sharp</strong><p>Under ${BLUR_SHARP_BELOW} is typical for a sharp photo.</p>`;
+    } else {
+      html += `<strong>Blur ${score}: not counted as blurry</strong>`
+        + `<p>Below your threshold of ${blurThreshold}. Scores from ${BLUR_SHARP_BELOW} up to the threshold are softer than most photos but usually still usable; lower the threshold to list more of them.</p>`;
+    }
+    html += '<p>Scores run from 0 (sharp) to 100 (very blurry). They rank photos against each other; they are not a percentage of blur.</p>';
+  } else {
+    html += `<p><b>Blur ${score}</b> (for reference only) was based on:</p>`;
+  }
+  const items = [];
+  if (r.quality != null) {
+    items.push(`<b>AI quality ${Math.round(r.quality * 100)}%</b>: a trained image-quality model's rating (higher is better).`);
+  } else {
+    items.push('<b>Basic scoring</b>: the AI quality model isn’t installed, so only the sharpness measure was used (less reliable across scenes).');
+  }
+  if (r.sharpness != null) {
+    items.push(`<b>Sharpness ${r.sharpness}</b>: edge detail in the sharpest part of the photo (higher is sharper; the typical value depends on the scene).`);
+  }
+  if (r.detail_fraction != null) {
+    items.push(`<b>Detail across ${Math.round(r.detail_fraction * 100)}% of the frame</b> (under 20% counts as low detail).`);
+  }
+  if (r.fine_detail_flag) {
+    items.push('<b>Very little fine detail</b>: even its sharpest areas lack the finest texture, typical of camera shake, a soft export, or heavy noise reduction. This raised the score.');
+  }
+  if (r.scored_from) {
+    items.push(`<b>Scored from ${escHtml(r.scored_from)}</b>: this RAW file’s built-in preview is too small to judge focus.`);
+  }
+  html += '<ul>' + items.map(i => `<li>${i}</li>`).join('') + '</ul>';
+  if (isDamaged(r)) {
+    html += '<p class="info-pop-detail">This file is damaged, so the score only reflects the part that could be read.</p>';
+  }
+  return html;
 }
 
 // Badge colour by fixed score bands, independent of the threshold slider
@@ -242,9 +296,9 @@ function setBlurThreshold(value) {
   applyBlurThreshold();
 }
 
-// Blurriest first within each folder; unscored photos (low detail, unreadable) last
+// Blurriest first within each folder; low-detail and unscored photos last
 function sortBlurCards() {
-  const key = c => c.blurResult.blur_score == null ? -1 : c.blurResult.blur_score;
+  const key = c => (c.blurResult.blur_score == null || c.blurResult.low_detail) ? -1 : c.blurResult.blur_score;
   for (const refs of blurGroups.values()) {
     [...refs.grid.children].sort((a, b) => key(b) - key(a)).forEach(c => refs.grid.appendChild(c));
   }
@@ -327,7 +381,7 @@ function blurDone() {
 
 function exportBlurData() {
   const header = ['Filename', 'Directory', 'Full Path', 'Blur Score', 'Sharpness', 'AI Quality', 'Method',
-                  `Blurry (threshold ${blurThreshold})`, 'Low Detail', 'Integrity', 'Integrity Issue', 'Error'];
+                  `Blurry (threshold ${blurThreshold})`, 'Low Detail', 'Detail %', 'Integrity', 'Integrity Issue', 'Error'];
   const rows = [header];
   for (const r of blurResults) {
     rows.push([
@@ -338,6 +392,7 @@ function exportBlurData() {
       r.method === 'ai' ? 'AI-assisted' : 'Basic',
       isBlurry(r) ? 'Yes' : 'No',
       r.low_detail ? 'Yes' : 'No',
+      r.detail_fraction != null ? Math.round(r.detail_fraction * 100) : '',
       ...integrityCsvCells(r),
       r.error || '',
     ]);

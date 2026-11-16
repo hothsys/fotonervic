@@ -89,7 +89,7 @@ function handleExifEvent(ev) {
   }
 }
 
-// ── Metadata note: ⓘ bubble with a pop-out explaining missing camera details ──
+// ── ⓘ bubbles with a pop-out: Exif Info's metadata notes and Blur Check's scores ──
 // One shared pop-out, positioned next to the clicked bubble (a pop-out inside
 // the card would be clipped by it). Opens on click or Enter/Space; closes on
 // a click elsewhere, Escape, or scroll.
@@ -106,6 +106,10 @@ const METADATA_NOTE_HELP = {
       <li><b>An old camera or phone</b> that didn't record a make and model.</li>
     </ul>
     <p>Exif Info shows everything the file contains. The original photo, if you have it, may still have these details.</p>`,
+  low_detail: `
+    <strong>Too little detail to judge focus</strong>
+    <p>Most of this photo is smooth sky, silhouette, haze, or plain surfaces. Blur Check judges focus from fine detail and edges, so a frame with very little of either can score as blurry even when it's perfectly sharp (a moon, a sunrise over a ridge, fog, a clear sky).</p>
+    <p>Photos like this are tagged <b>Low detail</b> and never counted as blurry; their score is shown in grey for reference only. Check focus yourself: open the photo and click it to zoom to 100%.</p>`,
   export: `
     <strong>Why the camera details were removed</strong>
     <p>This file was exported by Lightroom or Photoshop with its camera metadata left out: only the editor's signature remains, so there is no camera, lens, capture date, exposure, or location.</p>
@@ -116,6 +120,10 @@ const METADATA_NOTE_HELP = {
 function metadataNoteHelp(bubble) {
   let html = METADATA_NOTE_HELP[bubble.dataset.noteKind] || '';
   const w = +bubble.dataset.w, h = +bubble.dataset.h;
+  // Blur Check cards: built from the card's result (blurScoreHelp in js/blur.js)
+  const blurResult = bubble.closest('.blur-card')?.blurResult;
+  if (blurResult && bubble.dataset.noteKind === 'blur_score') html = blurScoreHelp(blurResult, true);
+  if (blurResult && bubble.dataset.noteKind === 'low_detail') html += blurScoreHelp(blurResult, false);
   if (bubble.dataset.noteKind === 'no_camera' && w && h && Math.max(w, h) <= 2048) {
     html += `<p class="info-pop-detail">This copy is ${w} × ${h}, smaller than a modern camera or phone original, which points to a shared or downloaded copy.</p>`;
   }
