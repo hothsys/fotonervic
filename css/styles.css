@@ -688,7 +688,8 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 #blur-section .integrity-tag       { font-size: 12.5px; padding: 1px 7px; }
 
 .blur-card.is-blurry { border-color: rgba(224,82,82,.55); }
-.blur-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.blur-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.blur-card-tags .info-bubble { margin-left: 0; color: var(--text2); }   /* beside its badge, centred by the flex row */
 .blur-badge, .blur-tag {
   font-family: var(--mono);
   font-size: 10.5px;
@@ -699,6 +700,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 .blur-badge.sharp    { background: var(--green-dim); color: var(--green); }
 .blur-badge.soft     { background: var(--amber-dim); color: var(--amber); }
 .blur-badge.blurry   { background: var(--red-dim);   color: var(--red); }
+.blur-badge.unjudged { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }   /* low detail: score for reference only */
 .blur-tag            { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
 /* Integrity: shared by Exif Info and Blur Check cards */
 .integrity-tag {
@@ -829,6 +831,7 @@ a.issue-filename:hover { color: var(--amber); text-decoration: underline; }
 }
 #lb-caption .lb-filename { color: #e8eaf0; overflow: hidden; text-overflow: ellipsis; }
 #lb-caption .blur-badge,
+#lb-caption .blur-tag,
 #lb-caption .integrity-tag { font-size: 12px; }
 @keyframes lb-spin { to { transform: rotate(360deg); } }
 

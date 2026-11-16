@@ -9,6 +9,18 @@ BLUR_TEX_STD   = 6.0      # tiles flatter than this (grey-level std) carry no fo
 BLUR_MIN_SIZE  = 512      # smaller images are too small to judge focus (e.g. the 160x120
                           # thumbnail Pillow opens for a NEF when rawpy isn't installed)
 
+# Low detail: photos that are mostly smooth sky, silhouette, haze, or plain
+# surfaces carry too little detail to judge focus (both measures read "no
+# detail" as blur), so they're tagged "Low detail" and never counted as blurry.
+# Measured as the share of tiles whose strongest-direction second-difference
+# variance reaches LOW_DETAIL_TILE_ENERGY. Owner's Sony a7 IV sunrise, moon, and
+# hazy-ridge shots (sharp at 100%, scored 52-70): 8-19% of the frame; labelled
+# blurry photos 54-100%, Iceland known-soft >= 23% (iphone_1427), owner's
+# not-blurry verdicts >= 27%. At 20% no currently flagged library photo changes;
+# 25% would excuse iphone_1427.
+LOW_DETAIL_TILE_ENERGY = 20.0
+LOW_DETAIL_MAX_FRACTION = 0.20
+
 
 # Exposure normalization before scoring. Blur Check is for culling before
 # (non-destructive) RAW editing: underexposure is fixable in Lightroom, missed

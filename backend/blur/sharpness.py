@@ -10,11 +10,14 @@ from backend.blur.calibration import (
     FINE_DETAIL_DIRECTIONS,
     FINE_DETAIL_PATCH,
     FINE_DETAIL_TOP_FRAC,
+    LOW_DETAIL_TILE_ENERGY,
 )
 
 def _hand_built_sharpness(gray):
-    """Sharpness of the photo's sharpest region, or None when it has too little
-    texture to judge. gray: 'L' image."""
+    """(sharpness, detail_fraction): sharpness of the photo's sharpest region,
+    or None when it has too little texture to judge; detail_fraction is the
+    share of tiles with real edge or fine detail (see LOW_DETAIL_* in
+    calibration.py). gray: 'L' image."""
     import numpy as np
     a = np.asarray(gray, dtype=np.float32)
     lo, hi = np.percentile(a, (1, 99))
@@ -37,13 +40,15 @@ def _hand_built_sharpness(gray):
     def per_tile(x):
         return x[:rows * th, :cols * tw].reshape(rows, th, cols, tw)
 
-    tile_sharp = np.stack([per_tile(d).var(axis=(1, 3)) for d in second_diffs]).min(axis=0)
+    tile_var = np.stack([per_tile(d).var(axis=(1, 3)) for d in second_diffs])
+    tile_sharp = tile_var.min(axis=0)         # weakest direction: catches camera shake
+    detail_fraction = float((tile_var.max(axis=0) >= LOW_DETAIL_TILE_ENERGY).mean())
     tile_std = per_tile(c).std(axis=(1, 3))
     textured = tile_sharp[tile_std >= BLUR_TEX_STD]
     k = max(2, math.ceil(BLUR_TOP_FRAC * tile_sharp.size))
     if textured.size < k:
-        return None
-    return float(np.sort(textured)[-k:].mean())
+        return None, detail_fraction
+    return float(np.sort(textured)[-k:].mean()), detail_fraction
 
 
 _FINE_DETAIL_MASKS = None
