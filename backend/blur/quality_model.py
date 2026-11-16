@@ -2,6 +2,7 @@
 and in-app download."""
 
 import hashlib
+import logging
 import os
 import re
 import subprocess
@@ -9,6 +10,8 @@ import threading
 
 from backend.blur.calibration import QUALITY_INPUT_SIZE
 from backend.config import APP_DIR, WORKER_THREADS, _APP_CONFIG
+
+log = logging.getLogger(__name__)
 
 QUALITY_MODEL_PATH  = os.path.join(APP_DIR, 'models', 'clipiqa_plus_rn50.onnx')
 QUALITY_MODEL_URL   = _APP_CONFIG.get('QUALITY_MODEL_URL', '')
@@ -41,6 +44,7 @@ def _quality_model():
             opts.inter_op_num_threads = 1
             _quality_session = ort.InferenceSession(
                 QUALITY_MODEL_PATH, opts, providers=['CPUExecutionProvider'])
+            log.info('Blur Check: AI quality model loaded')
     return _quality_session
 
 
@@ -149,6 +153,7 @@ def _download_quality_model():
         with _quality_lock:
             _quality_session = None
         _quality_download.update(state='done', error=None, detail=None)
+        log.info('AI quality model downloaded and verified')
     except Exception as e:
         if isinstance(e, _DownloadError):
             _quality_download.update(state='error', error=e.message, detail=e.detail)
@@ -156,6 +161,7 @@ def _download_quality_model():
             _quality_download.update(state='error', error=_SAVE_FAILED, detail=str(e))
         else:
             _quality_download.update(state='error', error='The download failed unexpectedly.', detail=str(e))
+        log.warning(f'AI quality model download failed: {_quality_download["error"]} ({_quality_download["detail"]})')
         try:
             os.remove(part)
         except OSError:
@@ -169,6 +175,7 @@ def start_quality_model_download():
         _quality_download.update(state='error', error='No QUALITY_MODEL_URL set in app.conf.', detail=None)
         return
     _quality_download.update(state='downloading', error=None, detail=None)
+    log.info(f'Downloading the AI quality model from {QUALITY_MODEL_URL}')
     threading.Thread(target=_download_quality_model, daemon=True).start()
 
 

@@ -1,48 +1,61 @@
 # Logging
 
-Foto Nerve Shatter doesn't keep an application log of its own. What the server prints to its console is the log, and where that goes depends on how you start it.
+Foto Nerve Shatter logs through Python's standard `logging` module, set up once in `backend/log.py` (first thing in `app.py`, so even setting up the Python environment is logged). Every module logs through its own logger (`logging.getLogger(__name__)`), so each line says which part of the app wrote it.
 
-## Where the output goes
+## Where it goes
 
-| Started with | Output |
+| Destination | What it has |
 |---|---|
-| `FotoNerveShatter.app`, `FotoNerveShatter.command`, or `./server.sh start` | `.server.log` in the project folder |
-| `python app.py` (e.g. on Windows) | The terminal window it runs in |
+| **`~/Library/Logs/FotoNerveShatter/app.log`** (macOS; `~/.local/state/FotoNerveShatter/app.log` elsewhere) | The persistent log: every run, with a timestamp, level, and source on each line. Rotates at 5 MB, keeping three old files (`app.log.1` to `app.log.3`, 20 MB at most). Console.app shows it too (under Log Reports). |
+| **The console** | Plain lines (warnings and errors labelled `WARNING:` / `ERROR:`). `server.sh` (and both macOS launchers, which use it) shows them while the server starts and keeps them in `.server.log` in the project folder, overwritten each start. With `python app.py` (e.g. on Windows) they appear in that terminal. |
 
-`server.sh` (which both macOS launchers use) runs the server in the background and redirects its output to `.server.log`. The file is overwritten each time the server starts, so it only covers the current run.
+`.server.log` also catches what libraries print directly rather than through `logging`, e.g. LibRaw's `data corrupted at ...` lines when a thumbnail or Blur Check decodes a damaged RAW file.
 
-## What's in it
+## Levels
 
-- **Setup**, with timings: creating `.venv` (first launch), installing uv, which packages were installed and how long it took, or "Dependencies up to date." when nothing changed.
-- **ExifTool**: "ExifTool 13.63 ready.", or why it's being downloaded and the outcome ("ExifTool 13.63 installed (4.5 s)." or the failure and its cause, with up to two automatic retries).
-- **Startup**: "Starting the web server on port …" and the banner with the app title and URL.
-- **Library warnings**: e.g. LibRaw's `data corrupted at ...` lines when a thumbnail or Blur Check decodes a damaged RAW file. (The integrity check captures LibRaw's output itself to compute the corruption percentage, so those lines don't appear for Scan Directory.)
-- **Errors**: Python tracebacks if something fails unexpectedly.
+Set with `LOG_LEVEL` in `app.conf` (default `INFO`):
 
-HTTP request lines (the standard `http.server` access log) are deliberately suppressed. Scan results aren't logged; use each scan's **Export CSV** for a record.
+| Level | Logged |
+|---|---|
+| `INFO` | Setup with timings (creating `.venv`, installing uv and packages, or "Dependencies up to date."), ExifTool ready / downloading / installed, the server's port, Python version, PID, and log file; each scan's start (folder, file count) and summary (files, damaged files by status, a scan-specific tally such as how metadata was read or how many photos are blurry, duration); cancellations; RAW worker processes starting; recovered files sent (Export Preview, Repair, Salvage, CSV exports); cache cleared; a watched volume appearing or going; downloads (ExifTool, the AI model); shutdown. |
+| `WARNING` | Fallbacks and failures that don't stop the app: an optional package or uv that didn't install (with the installer's output), ExifTool unavailable or a failed download (with each retry), a RAW worker crashing (and the file retried alone), every error response the server sends (method, path, status, reason). |
+| `ERROR` | Unexpected errors, with their full traceback: anything a request handler, a scan, or a background thread didn't catch. |
+| `DEBUG` | Everything above plus one line per file scanned (status, metadata source or blur result) and every HTTP request. Written to the file only; the console stays at INFO. |
+
+Example (`INFO`):
+
+```
+2026-11-15 15:24:44 INFO    app: Serving Foto Nerve Shatter on port 5900 (Python 3.13.0, PID 6790, log file ~/Library/Logs/FotoNerveShatter/app.log)...
+2026-11-15 15:24:45 INFO    backend.scan: Scan Directory started: /Volumes/Card/DCIM
+2026-11-15 15:24:45 INFO    backend.scan: Scan Directory: 491 files to check
+2026-11-15 15:24:45 INFO    backend.integrity: RAW integrity checks: 4 worker processes started
+2026-11-15 15:25:45 INFO    backend.scan: Scan Directory finished: 491 files in 60.1 s; damaged: 3 partial, 1 corrupt
+2026-11-15 15:25:50 WARNING backend.server: GET /api/integrity -> 404: File not found
+```
 
 ## What `server.sh` shows
 
-`./server.sh start` (and `restart`) shows the log as the server starts, indented under its own messages, so you can see setup progress instead of a silent wait:
+`./server.sh start` (and `restart`) shows the console output as the server starts, indented under its own messages, so you can see setup progress instead of a silent wait:
 
 ```
 Starting Foto Nerve Shatter on port 5900 (log: .server.log)...
   ExifTool 13.63 ready.
   Dependencies up to date.
-  Starting the web server on port 5900...
+  Serving Foto Nerve Shatter on port 5900 (Python 3.13.0, PID 6714, log file ...)...
 Foto Nerve Shatter started in 1 s (PID 6714) at http://localhost:5900
 ```
 
-During a long quiet step it prints `...still starting (N s)` every 5 seconds. If ExifTool is still downloading when the server is up, it says so (the download finishes in the background; `./server.sh logs` shows the result). If the server fails to start, it shows the rest of the log, which says why.
+During a long quiet step it prints `...still starting (N s)` every 5 seconds. If ExifTool is still downloading when the server is up, it says so. If the server fails to start, it shows the rest of the console output, which says why.
 
 ## Reading the log
 
 ```bash
-./server.sh logs                 # follow it live
-tail -n 50 .server.log           # the most recent output
-grep -i error .server.log        # just errors
+./server.sh logs                                          # follow app.log live (last 50 lines first)
+grep -E 'WARNING|ERROR' ~/Library/Logs/FotoNerveShatter/app.log   # just problems
+grep 'finished:' ~/Library/Logs/FotoNerveShatter/app.log          # scan summaries
+open -a Console ~/Library/Logs/FotoNerveShatter/app.log           # in Console.app
 ```
 
 ## Version control
 
-`.server.log` is ignored by git (the `*.log` rule in `.gitignore`), as are `server.sh`'s other runtime files, `.server.pid` and `.server.port`.
+Neither log is in the project's git: `app.log` lives outside the project, and `.server.log` is ignored (the `*.log` rule in `.gitignore`).

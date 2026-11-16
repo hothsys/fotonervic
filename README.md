@@ -70,7 +70,7 @@ From the project folder:
 ./server.sh start         # start in the background and open the browser
 ./server.sh stop          # stop it
 ./server.sh status        # check whether it's running
-./server.sh logs          # follow the server log
+./server.sh logs          # follow the app's log (~/Library/Logs/FotoNerveShatter/app.log)
 ./server.sh restart
 ```
 

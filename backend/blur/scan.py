@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from backend.jobs import run_in_threads
+from backend.jobs import log_scan, run_in_threads
 from backend.blur.score import measure_blur
 from backend.formats import SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
@@ -16,6 +16,8 @@ BLUR_IMAGE_EXTS = SUPPORTED_EXTENSIONS - VIDEO_EXTS
 blur_state = {'running': False, 'cancel': None, 'results': []}
 
 
+@log_scan('Blur Check', 'blur_result',
+          tally=lambda e: 'blurry (score 50+)' if (e.get('blur_score') or 0) >= 50 else None)
 def blur_scan_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 

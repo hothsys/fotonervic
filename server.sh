@@ -5,7 +5,7 @@
 #   ./server.sh stop           shut it down
 #   ./server.sh restart [port]
 #   ./server.sh status
-#   ./server.sh logs           follow the server log
+#   ./server.sh logs           follow the app's log (~/Library/Logs/<APP_NAME>/app.log)
 
 set -euo pipefail
 
@@ -18,7 +18,13 @@ APP_TITLE="${APP_TITLE:-$APP_NAME}"
 # while the server is running doesn't orphan it
 PID_FILE="$APP_DIR/.server.pid"
 PORT_FILE="$APP_DIR/.server.port"
-LOG_FILE="$APP_DIR/.server.log"
+LOG_FILE="$APP_DIR/.server.log"   # this run's console output (setup progress, library warnings)
+# The app's persistent log (backend/log.py): timestamps, levels, rotated, kept across runs
+if [[ "$(uname)" == Darwin ]]; then
+  APP_LOG="$HOME/Library/Logs/$APP_NAME/app.log"
+else
+  APP_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/$APP_NAME/app.log"
+fi
 DEFAULT_PORT="${PORT:-5900}"
 
 # On first launch (and after requirements.txt changes) app.py creates .venv and
@@ -142,7 +148,14 @@ case "${1:-}" in
   stop)    stop ;;
   restart) stop; start "${2:-}" ;;
   status)  status ;;
-  logs)    touch "$LOG_FILE"; tail -f "$LOG_FILE" ;;
+  logs)
+    if [[ -f "$APP_LOG" ]]; then
+      echo "Following $APP_LOG (Ctrl+C to stop)"
+      tail -n 50 -f "$APP_LOG"
+    else
+      touch "$LOG_FILE"; tail -f "$LOG_FILE"
+    fi
+    ;;
   *)
     echo "Usage: $0 {start [port]|stop|restart [port]|status|logs}" >&2
     exit 1

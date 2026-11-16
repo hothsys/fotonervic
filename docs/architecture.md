@@ -42,7 +42,8 @@ Modules import each other absolutely (`from backend.x import ...`).
 | `repair.py` | JPEG salvage (`salvage_jpeg`) |
 | `config.py` | `APP_DIR` (the project root), `app.conf` settings, `WORKER_THREADS` |
 | `formats.py` | Supported extensions, grouped by checker |
-| `jobs.py` | Per-scan cancellation bookkeeping |
+| `jobs.py` | Per-scan cancellation bookkeeping, `run_in_threads` (the scans' busy thread pool), and `log_scan` (logs each scan's start and summary) |
+| `log.py` | Logging setup: the rotating `~/Library/Logs/<APP_NAME>/app.log`, the console, `LOG_LEVEL`; see [Logging](logging.md) |
 
 ### Frontend (`js/`)
 

@@ -20,6 +20,7 @@ mode), so Perl starts once per server run, not once per file.
 
 import atexit
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -29,6 +30,8 @@ import threading
 import time
 
 from backend.config import APP_NAME, _APP_CONFIG
+
+log = logging.getLogger(__name__)
 
 
 def _cache_dir():
@@ -147,6 +150,7 @@ def read_metadata(filepath: str):
         except ImportError:
             return None
         except Exception:
+            log.warning(f'ExifTool failed on {filepath}; restarting it for the next file', exc_info=True)
             _stop_helper()   # restart on the next file
             return None
 
@@ -296,7 +300,7 @@ def _download_exiftool():
         shutil.rmtree(old, ignore_errors=True)
         _latest.update(version=version, checked=time.time())
         _download.update(state='done', error=None, detail=None)
-        print(f'ExifTool {version} installed ({time.time() - started:.1f} s).')
+        log.info(f'ExifTool {version} installed ({time.time() - started:.1f} s).')
     except _DownloadError as e:
         _download.update(state='error', error=e.message, detail=e.detail)
     except OSError as e:
@@ -306,7 +310,7 @@ def _download_exiftool():
         _download.update(state='error', error='The ExifTool download failed unexpectedly.', detail=str(e))
     finally:
         if _download['state'] == 'error':
-            print(f'ExifTool download failed: {_download["error"]} ({_download["detail"]})')
+            log.warning(f'ExifTool download failed: {_download["error"]} ({_download["detail"]})')
         try:
             os.remove(archive)
         except OSError:
@@ -324,7 +328,7 @@ def _download_with_retries(delays):
         _download_exiftool()
         if _download['state'] != 'error' or delay is None:
             return
-        print(f'  Retrying the ExifTool download in {delay} s (attempt {attempt + 1} of {len(delays) + 1})...')
+        log.info(f'  Retrying the ExifTool download in {delay} s (attempt {attempt + 1} of {len(delays) + 1})...')
         _download.update(state='downloading')   # keep the panel showing "Downloading" meanwhile
         time.sleep(delay)
 
@@ -354,12 +358,12 @@ def ensure_exiftool():
     copy is missing or older than EXIFTOOL_MIN_VERSION. Exif Info uses any other
     exiftool, or the built-in reader, until it's in place."""
     if _app_copy_current():
-        print(f'ExifTool {_installed_version(EXIFTOOL_SCRIPT)} ready.')
+        log.info(f'ExifTool {_installed_version(EXIFTOOL_SCRIPT)} ready.')
         return
     have = _installed_version(EXIFTOOL_SCRIPT) if os.path.isfile(EXIFTOOL_SCRIPT) else None
     if not (shutil.which('perl') and shutil.which('curl')):
-        print('ExifTool unavailable: downloading it needs Perl and curl. Exif Info will use its basic reader.')
+        log.warning('ExifTool unavailable: downloading it needs Perl and curl. Exif Info will use its basic reader.')
         return
     why = f'{have} is older than {EXIFTOOL_MIN_VERSION}' if have else 'not installed yet'
-    print(f'ExifTool {why}: downloading the latest release in the background...')
+    log.info(f'ExifTool {why}: downloading the latest release in the background...')
     start_exiftool_download(retry=True)
