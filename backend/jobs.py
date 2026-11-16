@@ -62,3 +62,55 @@ def run_in_threads(fn, items, cancel, workers=None):
             top_up()
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+def log_scan(name, result_type, tally=None):
+    """Decorator for a scan generator (root_dir, cancel): logs its start, a
+    DEBUG line per file, and a summary at the end (files, damaged files by
+    status, the optional tally(event) -> label counts, and duration), from the
+    events the scan already yields."""
+    import functools
+    import logging
+    import time
+    from collections import Counter
+
+    def wrap(scan_gen):
+        log = logging.getLogger(scan_gen.__module__)
+
+        @functools.wraps(scan_gen)
+        def run(root_dir, cancel):
+            started = time.time()
+            damaged, tallied = Counter(), Counter()
+            log.info(f'{name} started: {root_dir}')
+            try:
+                for event in scan_gen(root_dir, cancel):
+                    kind = event.get('type')
+                    if kind == 'total':
+                        log.info(f'{name}: {event["total"]:,} files to check')
+                    elif kind == result_type:
+                        status = event.get('status') or event.get('integrity') or 'ok'
+                        if status not in ('ok', 'unsupported'):
+                            damaged[status] += 1
+                        label = tally(event) if tally else None
+                        if label:
+                            tallied[label] += 1
+                        log.debug(f'{name}: {event.get("filepath")}: {status}' + (f', {label}' if label else ''))
+                    elif kind == 'complete':
+                        parts = [f'{event.get("scanned", 0):,} files in {time.time() - started:.1f} s']
+                        parts.append('damaged: ' + ', '.join(f'{n} {s}' for s, n in damaged.most_common())
+                                     if damaged else 'no damaged files')
+                        parts += [f'{n:,} {label}' for label, n in tallied.most_common()]
+                        log.info(f'{name} finished: ' + '; '.join(parts))
+                    elif kind == 'cancelled':
+                        log.info(f'{name} cancelled after {event.get("scanned", 0):,} files')
+                    elif kind == 'error':
+                        log.warning(f'{name}: {event.get("message") or event.get("reason")}')
+                    yield event
+            except GeneratorExit:   # the browser went away mid-scan
+                log.info(f'{name} stopped: the page closed the connection')
+                raise
+            except Exception:
+                log.exception(f'{name} failed')
+                raise
+        return run
+    return wrap

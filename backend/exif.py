@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from backend.jobs import run_in_threads
+from backend.jobs import log_scan, run_in_threads
 from backend.exiftool import read_metadata
 from backend.formats import HEIC_EXTS, RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
@@ -409,6 +409,8 @@ def extract_exif(filepath: str) -> dict:
 exif_state = {'running': False, 'cancel': None, 'results': []}
 
 
+@log_scan('Exif Info', 'exif_result',
+          tally=lambda e: f"metadata by {e.get('metadata_source') or 'none'}")
 def exif_scan_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 

@@ -1,6 +1,7 @@
 """Integrity checks: one module per format family, and the dispatcher every
 scan (Scan Directory, Exif Info, Blur Check) uses."""
 
+import logging
 import os
 import threading
 import time
@@ -16,6 +17,8 @@ from backend.integrity.raw import check_raw
 from backend.integrity.video import check_video
 
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
+
+log = logging.getLogger(__name__)
 
 # ─── RAW checks in worker processes ───────────────────────────────────────────
 # A RAW check decodes the sensor data with LibRaw (0.1-2 s per file; ~2 s for
@@ -64,10 +67,11 @@ def _get_raw_pool():
             try:
                 pool.submit(_pool_ping).result(timeout=_POOL_START_TIMEOUT)
                 _raw_pool = pool
+                log.info(f'RAW integrity checks: {RAW_CHECK_PROCESSES} worker processes started')
             except Exception as e:
                 pool.shutdown(wait=False, cancel_futures=True)
                 _raw_pool_usable = False
-                print(f'RAW integrity checks will run one at a time: worker processes failed to start ({e!r}).')
+                log.warning(f'RAW integrity checks will run one at a time: worker processes failed to start ({e!r}).')
         return _raw_pool
 
 
@@ -92,10 +96,12 @@ def _check_raw_isolated(filepath: str):
         # that crashed it. Retry this file on its own: only a crash there
         # means this file crashes the decoder.
         _discard_raw_pool(pool)
+        log.warning(f'A RAW worker process died; checking {filepath} again on its own')
         solo = _spawn_pool(1)
         try:
             return solo.submit(check_raw, filepath).result()
         except BrokenProcessPool:
+            log.warning(f'The RAW decoder crashes on {filepath}: reported as corrupt')
             return 'corrupt', ('The RAW decoder crashed reading this file, which usually means '
                                'its image data is badly damaged')
         finally:

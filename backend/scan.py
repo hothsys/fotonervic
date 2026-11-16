@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from backend.jobs import run_in_threads
+from backend.jobs import log_scan, run_in_threads
 from backend.formats import RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
 from backend.tiff import _has_usable_preview
@@ -21,6 +21,7 @@ scan_state = {
 # ─── Directory scanner (generator) ────────────────────────────────────────────
 
 
+@log_scan('Scan Directory', 'issue')
 def scan_directory_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 

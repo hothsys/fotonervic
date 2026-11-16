@@ -4,11 +4,12 @@ import csv
 import html
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
 import time
-from http.server import SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -31,6 +32,22 @@ from backend.thumbnails import (
 )
 from backend.tiff import _find_best_embedded_preview
 
+log = logging.getLogger(__name__)
+
+# ─── HTTP server ──────────────────────────────────────────────────────────────
+
+class AppServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        """An error no handler caught: log it with its traceback (the default
+        prints it to stderr only). A browser dropping the connection is normal."""
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+            return
+        log.error(f'Unhandled error while serving {client_address[0]}', exc_info=True)
+
+
 # ─── HTTP handler ─────────────────────────────────────────────────────────────
 
 class ScannerHandler(SimpleHTTPRequestHandler):
@@ -47,6 +64,9 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def _send_json(self, data, status=200):
+        if status >= 400:
+            error = data.get('error') if isinstance(data, dict) else data
+            log.warning(f'{self.command} {self._route_path()} -> {status}: {error}')
         body = json.dumps(data, default=str).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
@@ -55,6 +75,7 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_file(self, data, mimetype, filename):
+        log.info(f'{self._route_path()}: sent {filename} ({len(data):,} bytes)')
         self.send_response(200)
         self.send_header('Content-Type', mimetype)
         self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
@@ -239,7 +260,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
             return
         try:
             data = get_preview(filepath, full)
-        except Exception:
+        except Exception as e:
+            log.warning(f'Preview failed for {filepath}: {e!r}')
             self.send_error(422)
             return
         self.send_response(200)
@@ -257,6 +279,7 @@ class ScannerHandler(SimpleHTTPRequestHandler):
             cleared = len(_thumbnail_cache)
             _thumbnail_cache.clear()
         previews = clear_preview_cache()
+        log.info(f'Cache cleared: {cleared} thumbnails, {previews} previews')
         body = json.dumps({'ok': True, 'thumbnails_cleared': cleared, 'previews_cleared': previews}).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -575,6 +598,8 @@ class ScannerHandler(SimpleHTTPRequestHandler):
                 except OSError:
                     exists = False
                 if exists != last_exists:
+                    if last_exists is not None:
+                        log.info(f'Volume {"available" if exists else "gone (ejected or unmounted)"}: {path}')
                     last_exists = exists
                     event = json.dumps({'exists': exists, 'path': path})
                     self.wfile.write(f"data: {event}\n\n".encode())
@@ -584,4 +609,5 @@ class ScannerHandler(SimpleHTTPRequestHandler):
             pass
 
     def log_message(self, format, *args):
-        pass  # Suppress default access log noise
+        # The standard access log, and send_error's messages: DEBUG only
+        log.debug(f'{self.address_string()} {format % args}')
