@@ -26,6 +26,7 @@ _THUMBNAIL_SIZE = 300  # max px on either axis
 def _generate_thumbnail(filepath: str) -> bytes | None:
     """Return JPEG thumbnail bytes, or None on failure."""
     from PIL import Image, ImageFile
+
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     ext = Path(filepath).suffix.lower()
     try:
@@ -38,6 +39,7 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
         if ext in HEIC_EXTS:
             try:
                 import pillow_heif
+
                 pillow_heif.register_heif_opener()
             except ImportError:
                 pass
@@ -45,10 +47,12 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
         if ext in RAW_EXTS:
             try:
                 import rawpy
+
                 with rawpy.imread(filepath) as raw:
                     try:
                         thumb = raw.extract_thumb()
                         import rawpy as _rp
+
                         if thumb.format == _rp.ThumbFormat.JPEG:
                             img = Image.open(io.BytesIO(thumb.data))
                             orientation = img.getexif().get(_TAG_ORIENTATION)
@@ -60,8 +64,7 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
                             orientation = _RAW_FLIP_TO_ORIENTATION.get(raw.sizes.flip)
                     except Exception:
                         # postprocess() applies the RAW's orientation itself
-                        rgb = raw.postprocess(
-                            use_camera_wb=True, half_size=True, output_bps=8)
+                        rgb = raw.postprocess(use_camera_wb=True, half_size=True, output_bps=8)
                         img = Image.fromarray(rgb)
             except Exception:
                 pass
@@ -74,11 +77,11 @@ def _generate_thumbnail(filepath: str) -> bytes | None:
         # thumbnail carries no EXIF, so the browser can't rotate it for us.
         img.thumbnail((_THUMBNAIL_SIZE, _THUMBNAIL_SIZE), Image.LANCZOS)
         img = _apply_orientation(img, orientation)
-        if img.mode not in ('RGB', 'L'):
-            img = img.convert('RGB')
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
 
         buf = io.BytesIO()
-        img.save(buf, 'JPEG', quality=72, optimize=True)
+        img.save(buf, "JPEG", quality=72, optimize=True)
         buf.seek(0)
         return buf.read()
 

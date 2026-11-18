@@ -12,32 +12,32 @@ from backend.integrity import check_integrity
 from backend.tiff import _has_usable_preview
 
 scan_state = {
-    'running': False,
-    'cancel': None,
-    'results': [],
+    "running": False,
+    "cancel": None,
+    "results": [],
 }
 
 
 # ─── Directory scanner (generator) ────────────────────────────────────────────
 
 
-@log_scan('Scan Directory', 'issue')
+@log_scan("Scan Directory", "issue")
 def scan_directory_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser().resolve()
 
     if not root.exists():
-        yield {'type': 'error', 'message': f'Path not found: {root_dir}'}
+        yield {"type": "error", "message": f"Path not found: {root_dir}"}
         return
     if not root.is_dir():
-        yield {'type': 'error', 'message': f'Not a directory: {root_dir}'}
+        yield {"type": "error", "message": f"Not a directory: {root_dir}"}
         return
 
     # Count total files first
-    yield {'type': 'status', 'message': 'Counting image files…'}
+    yield {"type": "status", "message": "Counting image files…"}
     all_files = []
     for dp, dirs, files in os.walk(root, followlinks=False):
         if cancel.is_set():
-            yield {'type': 'cancelled', 'scanned': 0, 'issues': 0}
+            yield {"type": "cancelled", "scanned": 0, "issues": 0}
             return
         dirs.sort()
         for f in sorted(files):
@@ -45,11 +45,11 @@ def scan_directory_gen(root_dir: str, cancel: threading.Event):
                 all_files.append((dp, f))
 
     total = len(all_files)
-    yield {'type': 'total', 'total': total}
+    yield {"type": "total", "total": total}
 
     scanned = 0
-    issues  = 0
-    start   = time.time()
+    issues = 0
+    start = time.time()
 
     def _check_worker(dp, fname):
         """Run check_image in a worker thread."""
@@ -60,61 +60,63 @@ def scan_directory_gen(root_dir: str, cancel: threading.Event):
         except OSError:
             pass
         result = check_integrity(filepath)
-        status, reason = result['integrity'], result['integrity_reason']
+        status, reason = result["integrity"], result["integrity_reason"]
         # For damaged RAW files, whether Export Preview has anything to export
         has_preview = None
-        if status != 'ok' and Path(fname).suffix.lower() in RAW_EXTS:
+        if status != "ok" and Path(fname).suffix.lower() in RAW_EXTS:
             has_preview = _has_usable_preview(filepath)
         return dp, fname, filepath, file_size, status, reason, has_preview
 
     # Check files on a pool of worker threads, kept busy (backend/jobs.py)
-    for dp, fname, filepath, file_size, status, reason, has_preview in run_in_threads(_check_worker, all_files, cancel):
+    for dp, fname, filepath, file_size, status, reason, has_preview in run_in_threads(
+        _check_worker, all_files, cancel
+    ):
         if cancel.is_set():
-            yield {'type': 'cancelled', 'scanned': scanned, 'issues': issues}
+            yield {"type": "cancelled", "scanned": scanned, "issues": issues}
             return
         scanned += 1
 
         yield {
-            'type':    'scanning',
-            'file':    fname,
-            'dir':     dp,
-            'scanned': scanned,
-            'total':   total,
-            'issues':  issues,
+            "type": "scanning",
+            "file": fname,
+            "dir": dp,
+            "scanned": scanned,
+            "total": total,
+            "issues": issues,
         }
 
-        if status != 'ok':
+        if status != "ok":
             issues += 1
             # Extract corruption percentage from reason if present
             corrupt_pct = None
             if reason:
-                pct_m = re.search(r'~([\d.]+)% of file corrupted', reason)
+                pct_m = re.search(r"~([\d.]+)% of file corrupted", reason)
                 if pct_m:
                     corrupt_pct = float(pct_m.group(1))
             event = {
-                'type':      'issue',
-                'filepath':  filepath,
-                'filename':  fname,
-                'dir':       dp,
-                'ext':       Path(fname).suffix.lower(),
-                'file_size': file_size,
-                'status':    status,
-                'reason':    reason,
-                'scanned':   scanned,
-                'issues':    issues,
+                "type": "issue",
+                "filepath": filepath,
+                "filename": fname,
+                "dir": dp,
+                "ext": Path(fname).suffix.lower(),
+                "file_size": file_size,
+                "status": status,
+                "reason": reason,
+                "scanned": scanned,
+                "issues": issues,
             }
             if corrupt_pct is not None:
-                event['corrupt_pct'] = corrupt_pct
+                event["corrupt_pct"] = corrupt_pct
             if has_preview is not None:
-                event['has_preview'] = has_preview
+                event["has_preview"] = has_preview
             yield event
 
     elapsed = time.time() - start
     yield {
-        'type':    'complete',
-        'scanned': scanned,
-        'issues':  issues,
-        'elapsed': round(elapsed, 1),
+        "type": "complete",
+        "scanned": scanned,
+        "issues": issues,
+        "elapsed": round(elapsed, 1),
     }
 
 
@@ -124,17 +126,17 @@ def scan_directory_gen(root_dir: str, cancel: threading.Event):
 # disks; on slow network volumes it streams running totals. A new count cancels
 # the previous one (typing changes the path every few keystrokes).
 
-count_state = {'running': False, 'cancel': None, 'results': []}
-COUNT_PROGRESS_INTERVAL = 0.25   # seconds between running-total events
+count_state = {"running": False, "cancel": None, "results": []}
+COUNT_PROGRESS_INTERVAL = 0.25  # seconds between running-total events
 
 
 def count_media_gen(root_dir: str, cancel: threading.Event):
     root = Path(root_dir).expanduser()
     if not root.exists():
-        yield {'type': 'error', 'reason': 'not_found'}
+        yield {"type": "error", "reason": "not_found"}
         return
     if not root.is_dir():
-        yield {'type': 'error', 'reason': 'not_dir'}
+        yield {"type": "error", "reason": "not_dir"}
         return
 
     photos = videos = folders = 0
@@ -152,6 +154,11 @@ def count_media_gen(root_dir: str, cancel: threading.Event):
         now = time.time()
         if now - last >= COUNT_PROGRESS_INTERVAL:
             last = now
-            yield {'type': 'progress', 'photos': photos, 'videos': videos, 'folders': folders}
-    yield {'type': 'complete', 'photos': photos, 'videos': videos, 'folders': folders,
-           'elapsed': round(time.time() - start, 2)}
+            yield {"type": "progress", "photos": photos, "videos": videos, "folders": folders}
+    yield {
+        "type": "complete",
+        "photos": photos,
+        "videos": videos,
+        "folders": folders,
+        "elapsed": round(time.time() - start, 2),
+    }

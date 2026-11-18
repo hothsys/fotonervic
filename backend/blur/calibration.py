@@ -1,13 +1,13 @@
 """Every tunable number in Blur Check. Calibration changes (from the owner's
 verdicts) should only need to touch this file."""
 
-BLUR_WORK_SIZE = 1024     # long side of the working copy; makes scores comparable across resolutions
-BLUR_GRID      = 16       # tiles along the long side
-BLUR_TOP_FRAC  = 0.02     # sharpness = mean of the sharpest 2% of tiles (at least 2): "the subject"
-BLUR_MAX_GAIN  = 4.0      # cap on the contrast stretch
-BLUR_TEX_STD   = 6.0      # tiles flatter than this (grey-level std) carry no focus information
-BLUR_MIN_SIZE  = 512      # smaller images are too small to judge focus (e.g. the 160x120
-                          # thumbnail Pillow opens for a NEF when rawpy isn't installed)
+BLUR_WORK_SIZE = 1024  # long side of the working copy; makes scores comparable across resolutions
+BLUR_GRID = 16  # tiles along the long side
+BLUR_TOP_FRAC = 0.02  # sharpness = mean of the sharpest 2% of tiles (at least 2): "the subject"
+BLUR_MAX_GAIN = 4.0  # cap on the contrast stretch
+BLUR_TEX_STD = 6.0  # tiles flatter than this (grey-level std) carry no focus information
+BLUR_MIN_SIZE = 512  # smaller images are too small to judge focus (e.g. the 160x120
+# thumbnail Pillow opens for a NEF when rawpy isn't installed)
 
 # Low detail: photos that are mostly smooth sky, silhouette, haze, or plain
 # surfaces carry too little detail to judge focus (both measures read "no
@@ -27,19 +27,25 @@ LOW_DETAIL_MAX_FRACTION = 0.20
 # focus and motion blur aren't, so a dark photo shouldn't score as blurry. Both
 # measures otherwise penalize darkness (weak edges; the AI model learned that
 # people rate dark photos lower). Applied to the in-memory copy only.
-EXPOSURE_TARGET    = 0.40   # brighten until median luminance reaches 40% (never darken)
-EXPOSURE_MIN_GAMMA = 0.35   # strongest lift allowed, so near-black frames don't become pure noise
+EXPOSURE_TARGET = 0.40  # brighten until median luminance reaches 40% (never darken)
+EXPOSURE_MIN_GAMMA = 0.35  # strongest lift allowed, so near-black frames don't become pure noise
 
 
-QUALITY_INPUT_SIZE   = 768   # long side fed to the model: as accurate as 1024 px, ~2x faster
+QUALITY_INPUT_SIZE = 768  # long side fed to the model: as accurate as 1024 px, ~2x faster
 
 
 # Calibration, from a reference library (851 photos) and the user's labelled
 # test photos. Each measurement is standardized (z-score) against the library,
 # and the blur score maps the combined z to 0..100 so the boundary between the
 # labelled sharp and blurry photos lands on BLUR_DEFAULT_THRESHOLD.
-CAL_SHARP_MEAN, CAL_SHARP_STD = 2.6397, 0.3899      # hand-built log10(1 + sharpness), after exposure normalization
-CAL_QUALITY_MEAN, CAL_QUALITY_STD = 0.6674, 0.0803  # AI quality (probability of "good"), after exposure normalization
+CAL_SHARP_MEAN, CAL_SHARP_STD = (
+    2.6397,
+    0.3899,
+)  # hand-built log10(1 + sharpness), after exposure normalization
+CAL_QUALITY_MEAN, CAL_QUALITY_STD = (
+    0.6674,
+    0.0803,
+)  # AI quality (probability of "good"), after exposure normalization
 # Sharp/blurry boundary in combined z, from the owner's verdicts (41 photos:
 # labelled test set + Iceland photos they judged). AI: midway between the
 # least-sharp photo they call sharp and the sharpest-looking one they call
@@ -53,8 +59,8 @@ CAL_CUT_AI, CAL_CUT_BASIC = -2.0120, -1.6262
 # fool it, while the AI model judges both right. Higher shares stop catching
 # known-soft photos (1427, day3_0030) and push dark photos up.
 CAL_WEIGHT_AI = 0.6
-CAL_SCALE = 25.0                              # blur points per unit of z (at the threshold)
-CAL_CURVE = 25.0                              # softness of the S-curve that maps onto 0..100
+CAL_SCALE = 25.0  # blur points per unit of z (at the threshold)
+CAL_CURVE = 25.0  # softness of the S-curve that maps onto 0..100
 BLUR_DEFAULT_THRESHOLD = 50
 
 
@@ -68,8 +74,8 @@ BLUR_DEFAULT_THRESHOLD = 50
 #  2. the sensor data with an unsharp mask approximating that processing
 #     (radius 1.8, 120%, chosen on half the pairs; average gap 5 points on the
 #     other half, no DNG flagged)
-COMPANION_EXTS = ('.jpg', '.jpeg', '.heic', '.heif')
-SENSOR_UNSHARP = (1.8, 120, 2)   # radius, percent, threshold
+COMPANION_EXTS = (".jpg", ".jpeg", ".heic", ".heif")
+SENSOR_UNSHARP = (1.8, 120, 2)  # radius, percent, threshold
 
 
 # ── Fine-detail check (catches smeared/soft photos both measures rate ordinary) ──
@@ -91,7 +97,7 @@ SENSOR_UNSHARP = (1.8, 120, 2)   # radius, percent, threshold
 # doesn't vouch for the photo (or isn't installed).
 FINE_DETAIL_PATCH = 128
 FINE_DETAIL_DIRECTIONS = 12
-FINE_DETAIL_TOP_FRAC = 0.10      # use the sharpest 10% of patches (at least 3)
-FINE_DETAIL_CUTOFF = -1.53       # below this, the photo is flagged regardless of the blur score
-FINE_DETAIL_SCALE = 0.125        # how fast the floor rises below the cutoff
+FINE_DETAIL_TOP_FRAC = 0.10  # use the sharpest 10% of patches (at least 3)
+FINE_DETAIL_CUTOFF = -1.53  # below this, the photo is flagged regardless of the blur score
+FINE_DETAIL_SCALE = 0.125  # how fast the floor rises below the cutoff
 FINE_DETAIL_MAX_QUALITY_Z = 0.0  # floor skipped when the AI quality z is above this

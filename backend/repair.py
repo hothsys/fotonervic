@@ -9,6 +9,7 @@ from backend.formats import JPEG_EXTS
 
 # ─── JPEG salvage (donor-table grafting + MCU remap) ─────────────────────────
 
+
 def _extract_donor_tables(data: bytes):
     """Extract DQT/DHT/SOF0/SOS segments from a JPEG, skipping APP segments."""
     pos = 2  # skip SOI
@@ -27,14 +28,14 @@ def _extract_donor_tables(data: bytes):
             continue
         if pos + 3 >= len(data):
             break
-        seg_len = struct.unpack('>H', data[pos + 2:pos + 4])[0]
-        segment = data[pos:pos + 2 + seg_len]
+        seg_len = struct.unpack(">H", data[pos + 2 : pos + 4])[0]
+        segment = data[pos : pos + 2 + seg_len]
         if 0xE0 <= marker <= 0xEF:
             pos += 2 + seg_len
             continue
         if marker == 0xC0:  # SOF0
-            h = struct.unpack('>H', segment[5:7])[0]
-            w = struct.unpack('>H', segment[7:9])[0]
+            h = struct.unpack(">H", segment[5:7])[0]
+            w = struct.unpack(">H", segment[7:9])[0]
             ncomp = segment[9]
             max_h = max_v = 1
             for c in range(ncomp):
@@ -69,9 +70,9 @@ def _find_donor(directory: str, damaged_path: str):
 
     for cpath in sorted(candidates):
         try:
-            with open(cpath, 'rb') as f:
+            with open(cpath, "rb") as f:
                 header = f.read(2)
-                if header != b'\xff\xd8':
+                if header != b"\xff\xd8":
                     continue
                 f.seek(0)
                 donor_data = f.read()
@@ -92,9 +93,9 @@ def salvage_jpeg(filepath: str):
 
     file_size = os.path.getsize(filepath)
     if file_size < 2048:
-        raise ValueError('File too small to salvage')
+        raise ValueError("File too small to salvage")
 
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         damaged = f.read()
 
     # Find where leading zeros end
@@ -104,11 +105,11 @@ def salvage_jpeg(filepath: str):
             zero_end = i
             break
     else:
-        raise ValueError('File is entirely zeros')
+        raise ValueError("File is entirely zeros")
 
     compressed_data = damaged[zero_end:]
     if len(compressed_data) < 1024:
-        raise ValueError('Not enough surviving data to salvage')
+        raise ValueError("Not enough surviving data to salvage")
 
     # --- Check if the file contains its own tables (only header/SOI lost) ---
     # Scan for a main-image SOF0 (FF C0) followed eventually by SOS (FF DA).
@@ -123,10 +124,10 @@ def salvage_jpeg(filepath: str):
             found_sof = False
             while j < min(i + 2000, len(remaining) - 10):
                 if remaining[j] == 0xFF and remaining[j + 1] == 0xC0:
-                    seg_len = struct.unpack('>H', remaining[j + 2:j + 4])[0]
+                    seg_len = struct.unpack(">H", remaining[j + 2 : j + 4])[0]
                     if seg_len >= 11:
-                        h = struct.unpack('>H', remaining[j + 5:j + 7])[0]
-                        w = struct.unpack('>H', remaining[j + 7:j + 9])[0]
+                        h = struct.unpack(">H", remaining[j + 5 : j + 7])[0]
+                        w = struct.unpack(">H", remaining[j + 7 : j + 9])[0]
                         if w > 500 and h > 500:
                             own_tables_offset = zero_end + i
                             found_sof = True
@@ -137,22 +138,22 @@ def salvage_jpeg(filepath: str):
 
     if own_tables_offset > 0:
         # File has its own tables: just prepend SOI and decode
-        reconstructed = b'\xFF\xD8' + damaged[own_tables_offset:]
+        reconstructed = b"\xff\xd8" + damaged[own_tables_offset:]
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         try:
             img = Image.open(io.BytesIO(reconstructed))
             img.load()
         except Exception as e:
-            raise ValueError(f'Failed to decode with embedded tables: {e}')
+            raise ValueError(f"Failed to decode with embedded tables: {e}")
         finally:
             ImageFile.LOAD_TRUNCATED_IMAGES = False
 
         out_buf = io.BytesIO()
-        img.save(out_buf, 'JPEG', quality=100, subsampling='4:2:0')
+        img.save(out_buf, "JPEG", quality=100, subsampling="4:2:0")
         out_buf.seek(0)
         stem = Path(filepath).stem
         suffix = Path(filepath).suffix
-        return out_buf.read(), f'{stem}_salvaged{suffix}'
+        return out_buf.read(), f"{stem}_salvaged{suffix}"
 
     # --- Fallback: donor-table grafting for files with only compressed data ---
 
@@ -173,7 +174,7 @@ def salvage_jpeg(filepath: str):
     directory = os.path.dirname(filepath)
     pre_sos, sos_seg, sof_info = _find_donor(directory, filepath)
     if pre_sos is None:
-        raise ValueError('No valid donor JPEG found in the same directory')
+        raise ValueError("No valid donor JPEG found in the same directory")
 
     img_w, img_h, mcu_w, mcu_h = sof_info
     mcu_cols = img_w // mcu_w
@@ -181,19 +182,19 @@ def salvage_jpeg(filepath: str):
     total_mcus = mcu_rows * mcu_cols
 
     if total_mcus == 0:
-        raise ValueError('Invalid image dimensions from donor')
+        raise ValueError("Invalid image dimensions from donor")
 
     # Build grafted JPEG: SOI + tables [+ DRI if RSTs present] + SOS + data + EOI
     DRI = 4
-    buf = bytearray(b'\xFF\xD8')
+    buf = bytearray(b"\xff\xd8")
     for seg in pre_sos:
         buf.extend(seg)
     if has_rsts:
-        buf.extend(b'\xFF\xDD\x00\x04')
-        buf.extend(struct.pack('>H', DRI))
+        buf.extend(b"\xff\xdd\x00\x04")
+        buf.extend(struct.pack(">H", DRI))
     buf.extend(sos_seg)
     buf.extend(compressed_data)
-    buf.extend(b'\xFF\xD9')
+    buf.extend(b"\xff\xd9")
 
     # Decode
     ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -201,14 +202,13 @@ def salvage_jpeg(filepath: str):
         img = Image.open(io.BytesIO(bytes(buf)))
         img.load()
     except Exception as e:
-        raise ValueError(f'Failed to decode grafted image: {e}')
+        raise ValueError(f"Failed to decode grafted image: {e}")
     finally:
         ImageFile.LOAD_TRUNCATED_IMAGES = False
 
     decoded = img.copy()
     if decoded.size != (img_w, img_h):
-        raise ValueError(
-            f'Decoded size {decoded.size} does not match donor {img_w}x{img_h}')
+        raise ValueError(f"Decoded size {decoded.size} does not match donor {img_w}x{img_h}")
 
     if not has_rsts:
         # --- No-RST path: simple graft + decode, no MCU remap possible ---
@@ -226,7 +226,7 @@ def salvage_jpeg(filepath: str):
         first_gray_mcu_row = mcu_rows
         for mr in range(mcu_rows - 1, -1, -1):
             start = mr * mcu_h * row_len
-            row = pixels[start:start + row_len]
+            row = pixels[start : start + row_len]
             if len(set(row)) > 2:
                 first_gray_mcu_row = mr + 1
                 break
@@ -258,7 +258,7 @@ def salvage_jpeg(filepath: str):
             P = max(0, P_row * mcu_cols)
 
         # Step 3: MCU-level remap
-        output = Image.new('RGB', (img_w, img_h), (128, 128, 128))
+        output = Image.new("RGB", (img_w, img_h), (128, 128, 128))
         remap_count = min(total_mcus - P, total_mcus)
 
         for d_seq in range(remap_count):
@@ -284,15 +284,15 @@ def salvage_jpeg(filepath: str):
             o_row = orig_seq // mcu_cols
             o_col = orig_seq % mcu_cols
             dx, dy = o_col * mcu_w, o_row * mcu_h
-            gray_block = Image.new('RGB', (mcu_w, mcu_h), (128, 128, 128))
+            gray_block = Image.new("RGB", (mcu_w, mcu_h), (128, 128, 128))
             output.paste(gray_block, (dx, dy))
 
     # Encode result
     out_buf = io.BytesIO()
-    output.save(out_buf, 'JPEG', quality=100, subsampling='4:2:0')
+    output.save(out_buf, "JPEG", quality=100, subsampling="4:2:0")
     out_buf.seek(0)
 
     stem = Path(filepath).stem
     suffix = Path(filepath).suffix
-    filename = f'{stem}_salvaged{suffix}'
+    filename = f"{stem}_salvaged{suffix}"
     return out_buf.read(), filename

@@ -2,53 +2,78 @@
 
 SUPPORTED_EXTENSIONS = {
     # JPEG family
-    '.jpg', '.jpeg', '.jpe', '.jfif',
+    ".jpg",
+    ".jpeg",
+    ".jpe",
+    ".jfif",
     # PNG
-    '.png',
+    ".png",
     # HEIC / HEIF (Apple)
-    '.heic', '.heif',
+    ".heic",
+    ".heif",
     # Nikon RAW
-    '.nef', '.nrw',
+    ".nef",
+    ".nrw",
     # Sony RAW
-    '.arw', '.srf', '.sr2',
+    ".arw",
+    ".srf",
+    ".sr2",
     # Canon RAW
-    '.cr2', '.cr3',
+    ".cr2",
+    ".cr3",
     # Adobe DNG
-    '.dng',
+    ".dng",
     # Fujifilm RAW
-    '.raf',
+    ".raf",
     # Panasonic RAW
-    '.rw2',
+    ".rw2",
     # Olympus RAW
-    '.orf',
+    ".orf",
     # Pentax RAW
-    '.pef',
+    ".pef",
     # Samsung RAW
-    '.srw',
+    ".srw",
     # TIFF
-    '.tif', '.tiff',
+    ".tif",
+    ".tiff",
     # WebP
-    '.webp',
+    ".webp",
     # BMP
-    '.bmp',
+    ".bmp",
     # GIF
-    '.gif',
+    ".gif",
     # Video: MP4 / MOV / AVI / MPEG
-    '.mp4', '.m4v', '.mov',
-    '.avi',
-    '.mpg', '.mpeg',
+    ".mp4",
+    ".m4v",
+    ".mov",
+    ".avi",
+    ".mpg",
+    ".mpeg",
 }
 
-JPEG_EXTS  = {'.jpg', '.jpeg', '.jpe', '.jfif'}
-PNG_EXTS   = {'.png'}
-HEIC_EXTS  = {'.heic', '.heif'}
-RAW_EXTS   = {'.nef', '.nrw', '.arw', '.srf', '.sr2', '.cr2', '.cr3',
-               '.dng', '.raf', '.rw2', '.orf', '.pef', '.srw'}
-NEF_EXTS   = {'.nef', '.nrw'}
-ARW_EXTS   = {'.arw', '.srf', '.sr2'}
+JPEG_EXTS = {".jpg", ".jpeg", ".jpe", ".jfif"}
+PNG_EXTS = {".png"}
+HEIC_EXTS = {".heic", ".heif"}
+RAW_EXTS = {
+    ".nef",
+    ".nrw",
+    ".arw",
+    ".srf",
+    ".sr2",
+    ".cr2",
+    ".cr3",
+    ".dng",
+    ".raf",
+    ".rw2",
+    ".orf",
+    ".pef",
+    ".srw",
+}
+NEF_EXTS = {".nef", ".nrw"}
+ARW_EXTS = {".arw", ".srf", ".sr2"}
 TIFF_RAW_EXTS = NEF_EXTS | ARW_EXTS
 
-VIDEO_EXTS = {'.mp4', '.m4v', '.mov', '.avi', '.mpg', '.mpeg'}
-MP4_EXTS   = {'.mp4', '.m4v', '.mov'}
-AVI_EXTS   = {'.avi'}
-MPEG_EXTS  = {'.mpg', '.mpeg'}
+VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".avi", ".mpg", ".mpeg"}
+MP4_EXTS = {".mp4", ".m4v", ".mov"}
+AVI_EXTS = {".avi"}
+MPEG_EXTS = {".mpg", ".mpeg"}

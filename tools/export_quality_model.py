@@ -29,18 +29,16 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT = os.path.join(HERE, '..', 'models', 'clipiqa_plus_rn50.onnx')
+DEFAULT_OUT = os.path.join(HERE, "..", "models", "clipiqa_plus_rn50.onnx")
 
 # Fetched with curl into the cache paths pyiqa looks in, so pyiqa never tries
 # its own downloaders (Hugging Face's CDN and Python's certificate store can
 # both be blocked by corporate proxies, while curl uses the system trust store)
 WEIGHTS = {
-    'hub/clip/RN50.pt':
-        'https://openaipublic.azureedge.net/clip/models/'
-        'afeb0e10f9e5a86da6080e35cf09123aca3b358a0c3e3b6c78a7b63bc04b6762/RN50.pt',
-    'hub/pyiqa/CLIP-IQA+_learned_prompts-603f3273.pth':
-        'https://github.com/chaofengc/IQA-PyTorch/releases/download/v0.1-weights/'
-        'CLIP-IQA+_learned_prompts-603f3273.pth',
+    "hub/clip/RN50.pt": "https://openaipublic.azureedge.net/clip/models/"
+    "afeb0e10f9e5a86da6080e35cf09123aca3b358a0c3e3b6c78a7b63bc04b6762/RN50.pt",
+    "hub/pyiqa/CLIP-IQA+_learned_prompts-603f3273.pth": "https://github.com/chaofengc/IQA-PyTorch/releases/download/v0.1-weights/"
+    "CLIP-IQA+_learned_prompts-603f3273.pth",
 }
 
 
@@ -50,24 +48,26 @@ def fetch_weights(torch_home):
         if os.path.exists(dest):
             continue
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        print(f'Downloading {os.path.basename(dest)} ...')
-        subprocess.run(['curl', '-fL', '--retry', '3', '-o', dest + '.part', url], check=True)
-        os.replace(dest + '.part', dest)
+        print(f"Downloading {os.path.basename(dest)} ...")
+        subprocess.run(["curl", "-fL", "--retry", "3", "-o", dest + ".part", url], check=True)
+        os.replace(dest + ".part", dest)
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--out', default=DEFAULT_OUT, help='output .onnx path')
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--out", default=DEFAULT_OUT, help="output .onnx path")
     args = ap.parse_args()
 
-    torch_home = os.environ.setdefault('TORCH_HOME', os.path.join(tempfile.gettempdir(), 'fotonervic-torch'))
+    torch_home = os.environ.setdefault(
+        "TORCH_HOME", os.path.join(tempfile.gettempdir(), "fotonervic-torch")
+    )
     fetch_weights(torch_home)
 
     import torch
     import torch.nn as nn
     import pyiqa
 
-    metric = pyiqa.create_metric('clipiqa+', device='cpu')
+    metric = pyiqa.create_metric("clipiqa+", device="cpu")
     net = metric.net.eval()
     clip_model = net.clip_model[0].float().eval()
     with torch.no_grad():
@@ -80,9 +80,9 @@ def main():
         def __init__(self):
             super().__init__()
             self.visual = clip_model.visual
-            self.register_buffer('mean', net.default_mean.clone())
-            self.register_buffer('std', net.default_std.clone())
-            self.register_buffer('text', text.clone())
+            self.register_buffer("mean", net.default_mean.clone())
+            self.register_buffer("std", net.default_std.clone())
+            self.register_buffer("text", text.clone())
             self.scale = float(clip_model.logit_scale.exp())
 
         def forward(self, x):
@@ -99,24 +99,35 @@ def main():
     with torch.no_grad():
         ref, ours = float(metric(probe)), float(model(probe))
     if abs(ref - ours) > 1e-4:
-        sys.exit(f'Wrapper mismatch: pyiqa {ref:.6f} vs export {ours:.6f}')
+        sys.exit(f"Wrapper mismatch: pyiqa {ref:.6f} vs export {ours:.6f}")
 
     out = os.path.abspath(args.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    torch.onnx.export(model, probe, out, input_names=['image'], output_names=['quality'],
-                      dynamic_axes={'image': {2: 'height', 3: 'width'}},
-                      opset_version=17, dynamo=False)
+    torch.onnx.export(
+        model,
+        probe,
+        out,
+        input_names=["image"],
+        output_names=["quality"],
+        dynamic_axes={"image": {2: "height", 3: "width"}},
+        opset_version=17,
+        dynamo=False,
+    )
 
     import onnxruntime as ort
-    got = float(ort.InferenceSession(out, providers=['CPUExecutionProvider'])
-                .run(None, {'image': probe.numpy()})[0][0, 0])
+
+    got = float(
+        ort.InferenceSession(out, providers=["CPUExecutionProvider"]).run(
+            None, {"image": probe.numpy()}
+        )[0][0, 0]
+    )
     if abs(got - ref) > 1e-4:
-        sys.exit(f'ONNX mismatch: pyiqa {ref:.6f} vs onnxruntime {got:.6f}')
+        sys.exit(f"ONNX mismatch: pyiqa {ref:.6f} vs onnxruntime {got:.6f}")
 
-    digest = hashlib.sha256(open(out, 'rb').read()).hexdigest()
-    print(f'Wrote {out} ({os.path.getsize(out) / 1048576:.1f} MB)')
-    print(f'SHA-256 {digest}')
+    digest = hashlib.sha256(open(out, "rb").read()).hexdigest()
+    print(f"Wrote {out} ({os.path.getsize(out) / 1048576:.1f} MB)")
+    print(f"SHA-256 {digest}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
