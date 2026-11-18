@@ -1,4 +1,3 @@
-
 # ─── Blur detection ───────────────────────────────────────────────────────────
 #
 # Two measurements, combined when the AI model is installed:

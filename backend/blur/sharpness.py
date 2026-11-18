@@ -13,21 +13,23 @@ from backend.blur.calibration import (
     LOW_DETAIL_TILE_ENERGY,
 )
 
+
 def _hand_built_sharpness(gray):
     """(sharpness, detail_fraction): sharpness of the photo's sharpest region,
     or None when it has too little texture to judge; detail_fraction is the
     share of tiles with real edge or fine detail (see LOW_DETAIL_* in
     calibration.py). gray: 'L' image."""
     import numpy as np
+
     a = np.asarray(gray, dtype=np.float32)
     lo, hi = np.percentile(a, (1, 99))
     a = (a - lo) * min(BLUR_MAX_GAIN, 255.0 / max(hi - lo, 1.0))
 
     c = a[1:-1, 1:-1]
     second_diffs = (
-        a[1:-1, :-2] + a[1:-1, 2:] - 2 * c,           # horizontal
-        a[:-2, 1:-1] + a[2:, 1:-1] - 2 * c,           # vertical
-        (a[:-2, :-2] + a[2:, 2:] - 2 * c) / 2,        # diagonals (pixels sqrt2 apart)
+        a[1:-1, :-2] + a[1:-1, 2:] - 2 * c,  # horizontal
+        a[:-2, 1:-1] + a[2:, 1:-1] - 2 * c,  # vertical
+        (a[:-2, :-2] + a[2:, 2:] - 2 * c) / 2,  # diagonals (pixels sqrt2 apart)
         (a[:-2, 2:] + a[2:, :-2] - 2 * c) / 2,
     )
     h, w = c.shape
@@ -38,10 +40,10 @@ def _hand_built_sharpness(gray):
     th, tw = h // rows, w // cols
 
     def per_tile(x):
-        return x[:rows * th, :cols * tw].reshape(rows, th, cols, tw)
+        return x[: rows * th, : cols * tw].reshape(rows, th, cols, tw)
 
     tile_var = np.stack([per_tile(d).var(axis=(1, 3)) for d in second_diffs])
-    tile_sharp = tile_var.min(axis=0)         # weakest direction: catches camera shake
+    tile_sharp = tile_var.min(axis=0)  # weakest direction: catches camera shake
     detail_fraction = float((tile_var.max(axis=0) >= LOW_DETAIL_TILE_ENERGY).mean())
     tile_std = per_tile(c).std(axis=(1, 3))
     textured = tile_sharp[tile_std >= BLUR_TEX_STD]
@@ -58,15 +60,18 @@ def _fine_detail_masks():
     global _FINE_DETAIL_MASKS
     if _FINE_DETAIL_MASKS is None:
         import numpy as np
+
         n = FINE_DETAIL_PATCH
         f = np.fft.fftshift(np.fft.fftfreq(n))
-        fy, fx = np.meshgrid(f, f, indexing='ij')
+        fy, fx = np.meshgrid(f, f, indexing="ij")
         radius = np.hypot(fx, fy)
         angle = (np.degrees(np.arctan2(fy, fx)) + 180) % 180
         half_width = 180 / FINE_DETAIL_DIRECTIONS / 2
-        wedges = [np.abs(((angle - k * 180 / FINE_DETAIL_DIRECTIONS) + 90) % 180 - 90) < half_width
-                  for k in range(FINE_DETAIL_DIRECTIONS)]
-        fine = (radius >= 0.25) & (radius <= 0.45)      # cycles/pixel
+        wedges = [
+            np.abs(((angle - k * 180 / FINE_DETAIL_DIRECTIONS) + 90) % 180 - 90) < half_width
+            for k in range(FINE_DETAIL_DIRECTIONS)
+        ]
+        fine = (radius >= 0.25) & (radius <= 0.45)  # cycles/pixel
         coarse = (radius >= 0.06) & (radius <= 0.15)
         window = np.outer(np.hanning(n), np.hanning(n))
         _FINE_DETAIL_MASKS = ([w & fine for w in wedges], [w & coarse for w in wedges], window)
@@ -77,6 +82,7 @@ def _fine_detail(gray):
     """Mean log10(fine/coarse spectral power) over the sharpest patches and
     all orientations; lower = less fine detail. None if too little texture."""
     import numpy as np
+
     fine_masks, coarse_masks, window = _fine_detail_masks()
     a = np.asarray(gray, dtype=np.float32)
     lo, hi = np.percentile(a, (1, 99))
@@ -85,15 +91,19 @@ def _fine_detail(gray):
     ratios = []
     for y in range(0, a.shape[0] - n + 1, step):
         for x in range(0, a.shape[1] - n + 1, step):
-            tile = a[y:y + n, x:x + n]
+            tile = a[y : y + n, x : x + n]
             if tile.std() < BLUR_TEX_STD:
                 continue
             power = np.abs(np.fft.fftshift(np.fft.fft2((tile - tile.mean()) * window))) ** 2
-            ratios.append([math.log10(power[fm].mean() / max(power[cm].mean(), 1e-12))
-                           for fm, cm in zip(fine_masks, coarse_masks)])
+            ratios.append(
+                [
+                    math.log10(power[fm].mean() / max(power[cm].mean(), 1e-12))
+                    for fm, cm in zip(fine_masks, coarse_masks)
+                ]
+            )
     if len(ratios) < 3:
         return None
     ratios = np.array(ratios)
     k = max(3, int(round(FINE_DETAIL_TOP_FRAC * len(ratios))))
-    top = ratios[np.argsort(ratios.max(axis=1))[-k:]]   # patches sharpest in their best direction
+    top = ratios[np.argsort(ratios.max(axis=1))[-k:]]  # patches sharpest in their best direction
     return float(top.mean())

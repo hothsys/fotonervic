@@ -31,23 +31,24 @@ import time
 import webbrowser
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-VENV_DIR = os.path.join(APP_DIR, '.venv')
-REQUIREMENTS = os.path.join(APP_DIR, 'requirements.txt')
-REQUIREMENTS_STAMP = os.path.join(VENV_DIR, '.requirements.sha256')
-_BOOTSTRAP_ENV = 'FOTONERVIC_IN_VENV'   # set before restarting, so a mismatch can't loop
+VENV_DIR = os.path.join(APP_DIR, ".venv")
+REQUIREMENTS = os.path.join(APP_DIR, "requirements.txt")
+REQUIREMENTS_STAMP = os.path.join(VENV_DIR, ".requirements.sha256")
+_BOOTSTRAP_ENV = "FOTONERVIC_IN_VENV"  # set before restarting, so a mismatch can't loop
 
-log = logging.getLogger('app')
+log = logging.getLogger("app")
 
 # ─── Python environment ─────────────────────────────────────────────────────
 
+
 def _venv_bin(name):
-    if os.name == 'nt':
-        return os.path.join(VENV_DIR, 'Scripts', name + '.exe')
-    return os.path.join(VENV_DIR, 'bin', name)
+    if os.name == "nt":
+        return os.path.join(VENV_DIR, "Scripts", name + ".exe")
+    return os.path.join(VENV_DIR, "bin", name)
 
 
 def _venv_python():
-    return _venv_bin('python')
+    return _venv_bin("python")
 
 
 def _in_venv():
@@ -60,10 +61,10 @@ def _parse_requirements():
     required, optional = [], []
     with open(REQUIREMENTS) as f:
         for line in f:
-            spec, _, comment = line.partition('#')
+            spec, _, comment = line.partition("#")
             spec = spec.strip()
             if spec:
-                (optional if 'optional' in comment.lower() else required).append(spec)
+                (optional if "optional" in comment.lower() else required).append(spec)
     return required, optional
 
 
@@ -71,29 +72,34 @@ def _run_installer(cmd):
     """Run an install command; on failure, log what it printed (the reason)."""
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        output = (proc.stderr or proc.stdout or '').strip()
-        log.warning(f'{os.path.basename(cmd[0])} failed (exit {proc.returncode}): '
-                    + ('\n' + output[-2000:] if output else 'no output'))
+        output = (proc.stderr or proc.stdout or "").strip()
+        log.warning(
+            f"{os.path.basename(cmd[0])} failed (exit {proc.returncode}): "
+            + ("\n" + output[-2000:] if output else "no output")
+        )
     return proc.returncode == 0
 
 
 def _pip_install(*specs):
     return _run_installer(
-        [sys.executable, '-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', *specs])
+        [sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", *specs]
+    )
 
 
 def _uv(required, optional):
     """Path of uv in .venv, installing it with pip first if needed (the uv line
     in requirements.txt, so Dependabot keeps it current). None if that fails."""
-    uv = _venv_bin('uv')
+    uv = _venv_bin("uv")
     if not os.path.exists(uv):
-        spec = next((s for s in required + optional if s.split('>')[0].split('=')[0].strip() == 'uv'), 'uv')
-        log.info('Installing uv, the fast package installer, with pip...')
+        spec = next(
+            (s for s in required + optional if s.split(">")[0].split("=")[0].strip() == "uv"), "uv"
+        )
+        log.info("Installing uv, the fast package installer, with pip...")
         t = time.time()
         if _pip_install(spec) and os.path.exists(uv):
-            log.info(f'  uv ready ({time.time() - t:.1f} s)')
+            log.info(f"  uv ready ({time.time() - t:.1f} s)")
         else:
-            log.warning('uv could not be installed; using pip instead (slower).')
+            log.warning("uv could not be installed; using pip instead (slower).")
     return uv if os.path.exists(uv) else None
 
 
@@ -101,21 +107,24 @@ def _installer(uv):
     """install(*specs) -> bool, with uv when available, else pip."""
     if uv is None:
         return _pip_install
+
     def install(*specs):
         # --native-tls: use the macOS keychain, as curl does, so TLS-inspecting
         # proxies work (uv otherwise uses its own certificate list)
-        return _run_installer([uv, 'pip', 'install', '--quiet', '--native-tls',
-                               '--python', sys.executable, *specs])
+        return _run_installer(
+            [uv, "pip", "install", "--quiet", "--native-tls", "--python", sys.executable, *specs]
+        )
+
     return install
 
 
 def _install_requirements():
-    with open(REQUIREMENTS, 'rb') as f:
+    with open(REQUIREMENTS, "rb") as f:
         digest = hashlib.sha256(f.read()).hexdigest()
     try:
         with open(REQUIREMENTS_STAMP) as f:
             if f.read().strip() == digest:
-                log.info('Dependencies up to date.')   # already installed for this requirements.txt
+                log.info("Dependencies up to date.")  # already installed for this requirements.txt
                 return
     except OSError:
         pass
@@ -123,24 +132,28 @@ def _install_requirements():
     required, optional = _parse_requirements()
     started = time.time()
     first = not os.path.exists(REQUIREMENTS_STAMP)
-    log.info(('Installing' if first else 'requirements.txt changed; updating') + ' dependencies...')
+    log.info(("Installing" if first else "requirements.txt changed; updating") + " dependencies...")
     uv = _uv(required, optional)
     install = _installer(uv)
-    names = [spec.split('>')[0].split('=')[0].split('<')[0].strip() for spec in required + optional]
-    log.info(f'Installing {len(names)} packages with {"uv" if uv else "pip"}: {", ".join(names)}')
+    names = [spec.split(">")[0].split("=")[0].split("<")[0].strip() for spec in required + optional]
+    log.info(f"Installing {len(names)} packages with {'uv' if uv else 'pip'}: {', '.join(names)}")
     # One pass for everything; if something fails, the required ones, then each
     # optional one on its own, so a failure only turns off that feature
     if not install(*required, *optional):
         if required and not install(*required):
-            log.error('Could not install the required packages (' + ', '.join(required) + '). '
-                      'Check your internet connection and run the app again.')
+            log.error(
+                "Could not install the required packages (" + ", ".join(required) + "). "
+                "Check your internet connection and run the app again."
+            )
             sys.exit(1)
         for spec in optional:
             if not install(spec):
-                log.warning(f'Could not install optional {spec}; the feature that needs it is turned off.')
-    with open(REQUIREMENTS_STAMP, 'w') as f:
+                log.warning(
+                    f"Could not install optional {spec}; the feature that needs it is turned off."
+                )
+    with open(REQUIREMENTS_STAMP, "w") as f:
         f.write(digest)
-    log.info(f'Dependencies ready ({time.time() - started:.1f} s).')
+    log.info(f"Dependencies ready ({time.time() - started:.1f} s).")
 
 
 def _bootstrap():
@@ -148,45 +161,51 @@ def _bootstrap():
     if not _in_venv() and not os.environ.get(_BOOTSTRAP_ENV):
         python = _venv_python()
         if not os.path.exists(python):
-            log.info('Creating the app\'s Python environment in .venv ...')
+            log.info("Creating the app's Python environment in .venv ...")
             t = time.time()
             import venv
+
             venv.EnvBuilder(with_pip=True).create(VENV_DIR)
-            log.info(f'  .venv created ({time.time() - t:.1f} s)')
-        os.environ[_BOOTSTRAP_ENV] = '1'
-        os.execv(python, [python, '-u', os.path.abspath(__file__), *sys.argv[1:]])
+            log.info(f"  .venv created ({time.time() - t:.1f} s)")
+        os.environ[_BOOTSTRAP_ENV] = "1"
+        os.execv(python, [python, "-u", os.path.abspath(__file__), *sys.argv[1:]])
     # ExifTool needs nothing from pip, so its download (if due) runs alongside the install
     from backend.exiftool import ensure_exiftool
+
     ensure_exiftool()
     _install_requirements()
 
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from backend.log import setup_logging
-    log_file = setup_logging()     # first: the bootstrap's own steps are logged too
+
+    log_file = setup_logging()  # first: the bootstrap's own steps are logged too
     _bootstrap()
 
     from backend.config import APP_TITLE
     from backend.server import AppServer, ScannerHandler
 
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5900
-    log.info(f'Serving {APP_TITLE} on port {port} (Python {sys.version.split()[0]}, PID {os.getpid()}'
-             + (f', log file {log_file}' if log_file else '') + ')...')
+    log.info(
+        f"Serving {APP_TITLE} on port {port} (Python {sys.version.split()[0]}, PID {os.getpid()}"
+        + (f", log file {log_file}" if log_file else "")
+        + ")..."
+    )
     print()
-    print('╔══════════════════════════════════════════════╗')
-    print(f'║{APP_TITLE.center(46)}║')
-    print(f'║  Open http://localhost:{port} in your browser  ║')
-    print('╚══════════════════════════════════════════════╝')
+    print("╔══════════════════════════════════════════════╗")
+    print(f"║{APP_TITLE.center(46)}║")
+    print(f"║  Open http://localhost:{port} in your browser  ║")
+    print("╚══════════════════════════════════════════════╝")
     print()
-    threading.Timer(1.2, lambda: webbrowser.open(f'http://localhost:{port}')).start()
-    server = AppServer(('127.0.0.1', port), ScannerHandler)
+    threading.Timer(1.2, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+    server = AppServer(("127.0.0.1", port), ScannerHandler)
     # server.sh stop sends SIGTERM, which by default ends Python without any
     # clean-up; exit normally instead, so worker processes are shut down too
     signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
     try:
         server.serve_forever()
     except (KeyboardInterrupt, SystemExit):
-        log.info('Shutting down.')
+        log.info("Shutting down.")
         server.server_close()

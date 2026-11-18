@@ -23,18 +23,18 @@ import threading
 
 from backend.config import APP_NAME, _APP_CONFIG
 
-LOG_FILE_MAX_BYTES = 5 * 1024 * 1024   # rotate at 5 MB...
-LOG_FILE_BACKUPS = 3                   # ...keeping app.log.1 to app.log.3 (20 MB at most)
+LOG_FILE_MAX_BYTES = 5 * 1024 * 1024  # rotate at 5 MB...
+LOG_FILE_BACKUPS = 3  # ...keeping app.log.1 to app.log.3 (20 MB at most)
 
 
 def log_dir():
-    if platform.system() == 'Darwin':
-        return os.path.expanduser(f'~/Library/Logs/{APP_NAME}')
-    base = os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state')
+    if platform.system() == "Darwin":
+        return os.path.expanduser(f"~/Library/Logs/{APP_NAME}")
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
     return os.path.join(base, APP_NAME)
 
 
-LOG_FILE = os.path.join(log_dir(), 'app.log')
+LOG_FILE = os.path.join(log_dir(), "app.log")
 
 
 class _ConsoleFormatter(logging.Formatter):
@@ -43,9 +43,9 @@ class _ConsoleFormatter(logging.Formatter):
     def format(self, record):
         message = record.getMessage()
         if record.levelno >= logging.WARNING:
-            message = f'{record.levelname}: {message}'
+            message = f"{record.levelname}: {message}"
         if record.exc_info:
-            message += '\n' + self.formatException(record.exc_info)
+            message += "\n" + self.formatException(record.exc_info)
         return message
 
 
@@ -53,13 +53,13 @@ def setup_logging():
     """Configure the root logger (once per process). Returns the log file path,
     or None if it couldn't be created (console logging still works)."""
     root = logging.getLogger()
-    if getattr(root, '_app_configured', False):
+    if getattr(root, "_app_configured", False):
         return LOG_FILE if any(isinstance(h, logging.FileHandler) for h in root.handlers) else None
-    level = getattr(logging, str(_APP_CONFIG.get('LOG_LEVEL', 'INFO')).upper(), logging.INFO)
+    level = getattr(logging, str(_APP_CONFIG.get("LOG_LEVEL", "INFO")).upper(), logging.INFO)
     root.setLevel(level)
 
     console = logging.StreamHandler(sys.stdout)
-    console.setLevel(max(level, logging.INFO))   # DEBUG detail goes to the file only
+    console.setLevel(max(level, logging.INFO))  # DEBUG detail goes to the file only
     console.setFormatter(_ConsoleFormatter())
     root.addHandler(console)
 
@@ -67,16 +67,22 @@ def setup_logging():
     try:
         os.makedirs(log_dir(), exist_ok=True)
         file_handler = logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=LOG_FILE_MAX_BYTES, backupCount=LOG_FILE_BACKUPS, encoding='utf-8')
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)-7s %(name)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+            LOG_FILE, maxBytes=LOG_FILE_MAX_BYTES, backupCount=LOG_FILE_BACKUPS, encoding="utf-8"
+        )
+        file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)-7s %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            )
+        )
         root.addHandler(file_handler)
         log_file = LOG_FILE
     except OSError as e:
-        logging.getLogger(__name__).warning(f'Logging to the console only: cannot write {LOG_FILE} ({e})')
+        logging.getLogger(__name__).warning(
+            f"Logging to the console only: cannot write {LOG_FILE} ({e})"
+        )
 
     # Libraries' own debug chatter (e.g. Pillow's plugin loading) isn't useful here
-    for noisy in ('PIL', 'urllib3', 'exiftool'):
+    for noisy in ("PIL", "urllib3", "exiftool"):
         logging.getLogger(noisy).setLevel(max(level, logging.INFO))
 
     # Errors nothing else caught: log them with their traceback instead of losing them
@@ -84,11 +90,13 @@ def setup_logging():
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc, tb)
             return
-        logging.getLogger('app').critical('Unhandled error', exc_info=(exc_type, exc, tb))
+        logging.getLogger("app").critical("Unhandled error", exc_info=(exc_type, exc, tb))
+
     sys.excepthook = log_uncaught
-    threading.excepthook = lambda args: logging.getLogger('app').error(
-        f'Unhandled error in thread {args.thread.name if args.thread else "?"}',
-        exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+    threading.excepthook = lambda args: logging.getLogger("app").error(
+        f"Unhandled error in thread {args.thread.name if args.thread else '?'}",
+        exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+    )
 
     root._app_configured = True
     return log_file

@@ -10,26 +10,29 @@ import threading
 
 _job_lock = threading.Lock()
 
+
 def _start_job(state):
     """Cancel any job still running for this state and register a new one."""
     with _job_lock:
-        if state['cancel'] is not None:
-            state['cancel'].set()
+        if state["cancel"] is not None:
+            state["cancel"].set()
         cancel = threading.Event()
-        state['cancel']  = cancel
-        state['results'] = []
-        state['running'] = True
+        state["cancel"] = cancel
+        state["results"] = []
+        state["running"] = True
     return cancel
+
 
 def _finish_job(state, cancel):
     with _job_lock:
-        if state['cancel'] is cancel:
-            state['running'] = False
+        if state["cancel"] is cancel:
+            state["running"] = False
+
 
 def _cancel_job(state):
     with _job_lock:
-        if state['cancel'] is not None:
-            state['cancel'].set()
+        if state["cancel"] is not None:
+            state["cancel"].set()
 
 
 def run_in_threads(fn, items, cancel, workers=None):
@@ -40,6 +43,7 @@ def run_in_threads(fn, items, cancel, workers=None):
     loop early cancels whatever hasn't started."""
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
     from backend.config import WORKER_THREADS
+
     workers = workers or WORKER_THREADS
     executor = ThreadPoolExecutor(max_workers=workers)
     pending = set()
@@ -81,36 +85,46 @@ def log_scan(name, result_type, tally=None):
         def run(root_dir, cancel):
             started = time.time()
             damaged, tallied = Counter(), Counter()
-            log.info(f'{name} started: {root_dir}')
+            log.info(f"{name} started: {root_dir}")
             try:
                 for event in scan_gen(root_dir, cancel):
-                    kind = event.get('type')
-                    if kind == 'total':
-                        log.info(f'{name}: {event["total"]:,} files to check')
+                    kind = event.get("type")
+                    if kind == "total":
+                        log.info(f"{name}: {event['total']:,} files to check")
                     elif kind == result_type:
-                        status = event.get('status') or event.get('integrity') or 'ok'
-                        if status not in ('ok', 'unsupported'):
+                        status = event.get("status") or event.get("integrity") or "ok"
+                        if status not in ("ok", "unsupported"):
                             damaged[status] += 1
                         label = tally(event) if tally else None
                         if label:
                             tallied[label] += 1
-                        log.debug(f'{name}: {event.get("filepath")}: {status}' + (f', {label}' if label else ''))
-                    elif kind == 'complete':
-                        parts = [f'{event.get("scanned", 0):,} files in {time.time() - started:.1f} s']
-                        parts.append('damaged: ' + ', '.join(f'{n} {s}' for s, n in damaged.most_common())
-                                     if damaged else 'no damaged files')
-                        parts += [f'{n:,} {label}' for label, n in tallied.most_common()]
-                        log.info(f'{name} finished: ' + '; '.join(parts))
-                    elif kind == 'cancelled':
-                        log.info(f'{name} cancelled after {event.get("scanned", 0):,} files')
-                    elif kind == 'error':
-                        log.warning(f'{name}: {event.get("message") or event.get("reason")}')
+                        log.debug(
+                            f"{name}: {event.get('filepath')}: {status}"
+                            + (f", {label}" if label else "")
+                        )
+                    elif kind == "complete":
+                        parts = [
+                            f"{event.get('scanned', 0):,} files in {time.time() - started:.1f} s"
+                        ]
+                        parts.append(
+                            "damaged: " + ", ".join(f"{n} {s}" for s, n in damaged.most_common())
+                            if damaged
+                            else "no damaged files"
+                        )
+                        parts += [f"{n:,} {label}" for label, n in tallied.most_common()]
+                        log.info(f"{name} finished: " + "; ".join(parts))
+                    elif kind == "cancelled":
+                        log.info(f"{name} cancelled after {event.get('scanned', 0):,} files")
+                    elif kind == "error":
+                        log.warning(f"{name}: {event.get('message') or event.get('reason')}")
                     yield event
-            except GeneratorExit:   # the browser went away mid-scan
-                log.info(f'{name} stopped: the page closed the connection')
+            except GeneratorExit:  # the browser went away mid-scan
+                log.info(f"{name} stopped: the page closed the connection")
                 raise
             except Exception:
-                log.exception(f'{name} failed')
+                log.exception(f"{name} failed")
                 raise
+
         return run
+
     return wrap

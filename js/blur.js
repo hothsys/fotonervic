@@ -6,16 +6,16 @@
 // Matches BLUR_DEFAULT_THRESHOLD in backend/blur/calibration.py. The saved setting is versioned
 // because the score's scale changed when the AI quality model was added.
 const BLUR_DEFAULT_THRESHOLD = 50;
-const BLUR_THRESHOLD_KEY = 'blurThreshold.v3';   // v3: recalibrated to the owner's verdicts
+const BLUR_THRESHOLD_KEY = "blurThreshold.v3"; // v3: recalibrated to the owner's verdicts
 let blurThreshold = BLUR_DEFAULT_THRESHOLD;
 try {
   const saved = parseInt(localStorage.getItem(BLUR_THRESHOLD_KEY), 10);
   if (saved >= 0 && saved <= 100) blurThreshold = saved;
-} catch(e) {}
+} catch (e) {}
 
 let blurEventSource = null;
 let blurResults = [];
-const blurGroups = new Map();  // dir -> { group, grid, badge, total, blurry }
+const blurGroups = new Map(); // dir -> { group, grid, badge, total, blurry }
 // Running counts, so each streamed result costs O(1); recounted on threshold changes
 let blurCounts = { blurry: 0, low: 0, damaged: 0 };
 
@@ -25,69 +25,72 @@ function isBlurry(r) {
   return r.blur_score != null && !r.low_detail && Math.round(r.blur_score) >= blurThreshold;
 }
 
-
 function startBlurScan() {
   stopDirCount();
-  const dir = document.getElementById('dir-input').value.trim();
-  if (!dir) { alert('Please enter a directory path.'); return; }
+  const dir = document.getElementById("dir-input").value.trim();
+  if (!dir) {
+    alert("Please enter a directory path.");
+    return;
+  }
   rememberScanDir(dir);
 
   blurResults = [];
   blurGroups.clear();
   blurCounts = { blurry: 0, low: 0, damaged: 0 };
-  document.getElementById('blur-folder-list').innerHTML = '';
-  document.getElementById('blur-summary-label').textContent = '';
-  document.getElementById('blur-empty').style.display = 'none';
+  document.getElementById("blur-folder-list").innerHTML = "";
+  document.getElementById("blur-summary-label").textContent = "";
+  document.getElementById("blur-empty").style.display = "none";
   hideScanResults();
   hideExifResults();
   syncBlurSlider();
-  document.getElementById('blur-section').style.display = 'block';
+  document.getElementById("blur-section").style.display = "block";
   refreshQualityModelStatus();
 
-  setBusy('blur');
-  document.getElementById('progress-section').style.display = 'block';
-  document.getElementById('p-bar').style.width     = '0%';
-  document.getElementById('p-scanned').textContent = '0';
-  document.getElementById('p-total').textContent   = '?';
-  document.getElementById('p-issues').textContent  = '0';
-  document.getElementById('p-eta').textContent     = '';
-  document.getElementById('p-current').textContent = 'Checking focus\u2026';
-  document.getElementById('p-current').classList.add('scanning-pulse');
+  setBusy("blur");
+  document.getElementById("progress-section").style.display = "block";
+  document.getElementById("p-bar").style.width = "0%";
+  document.getElementById("p-scanned").textContent = "0";
+  document.getElementById("p-total").textContent = "?";
+  document.getElementById("p-issues").textContent = "0";
+  document.getElementById("p-eta").textContent = "";
+  document.getElementById("p-current").textContent = "Checking focus\u2026";
+  document.getElementById("p-current").classList.add("scanning-pulse");
 
   if (blurEventSource) blurEventSource.close();
-  blurEventSource = new EventSource('/api/blur-scan?dir=' + encodeURIComponent(dir));
-  blurEventSource.onmessage = e => handleBlurEvent(JSON.parse(e.data));
-  blurEventSource.onerror   = () => blurDone();
+  blurEventSource = new EventSource("/api/blur-scan?dir=" + encodeURIComponent(dir));
+  blurEventSource.onmessage = (e) => handleBlurEvent(JSON.parse(e.data));
+  blurEventSource.onerror = () => blurDone();
 }
 
 function handleBlurEvent(ev) {
   switch (ev.type) {
-    case 'total':
-      document.getElementById('p-total').textContent = ev.total.toLocaleString();
+    case "total":
+      document.getElementById("p-total").textContent = ev.total.toLocaleString();
       break;
-    case 'scanning': {
-      const pct = ev.total > 0 ? (ev.scanned / ev.total * 100).toFixed(1) : 0;
-      document.getElementById('p-bar').style.width     = pct + '%';
-      document.getElementById('p-scanned').textContent = ev.scanned.toLocaleString();
-      document.getElementById('p-eta').textContent     = pct + '% complete';
-      document.getElementById('p-current').textContent = ev.dir + '  /  ' + ev.file;
+    case "scanning": {
+      const pct = ev.total > 0 ? ((ev.scanned / ev.total) * 100).toFixed(1) : 0;
+      document.getElementById("p-bar").style.width = pct + "%";
+      document.getElementById("p-scanned").textContent = ev.scanned.toLocaleString();
+      document.getElementById("p-eta").textContent = pct + "% complete";
+      document.getElementById("p-current").textContent = ev.dir + "  /  " + ev.file;
       break;
     }
-    case 'blur_result':
+    case "blur_result":
       addBlurCard(ev);
-      document.getElementById('p-issues').textContent = blurCounts.blurry.toLocaleString();
+      document.getElementById("p-issues").textContent = blurCounts.blurry.toLocaleString();
       break;
-    case 'error':
-      alert('Blur check error: ' + ev.message);
+    case "error":
+      alert("Blur check error: " + ev.message);
       blurDone();
       break;
-    case 'cancelled':
-    case 'complete':
-      document.getElementById('p-current').textContent = ev.type === 'complete'
-        ? `\u2713 Done: ${(ev.scanned||0).toLocaleString()} photos in ${ev.elapsed}s`
-        : `Cancelled after ${(ev.scanned||0).toLocaleString()} photos`;
-      document.getElementById('p-current').classList.remove('scanning-pulse');
-      document.getElementById('p-bar').style.width = '100%';
+    case "cancelled":
+    case "complete":
+      document.getElementById("p-current").textContent =
+        ev.type === "complete"
+          ? `\u2713 Done: ${(ev.scanned || 0).toLocaleString()} photos in ${ev.elapsed}s`
+          : `Cancelled after ${(ev.scanned || 0).toLocaleString()} photos`;
+      document.getElementById("p-current").classList.remove("scanning-pulse");
+      document.getElementById("p-bar").style.width = "100%";
       sortBlurCards();
       blurDone();
       break;
@@ -98,56 +101,66 @@ function addBlurCard(ev) {
   blurResults.push(ev);
   const refs = upsertBlurFolderGroup(ev.dir);
 
-  const card = document.createElement('div');
-  card.className = 'exif-card blur-card';
+  const card = document.createElement("div");
+  card.className = "exif-card blur-card";
   const parts = [ev.filepath];
-  if (ev.sharpness != null) parts.push('Sharpness measure: ' + ev.sharpness);
-  if (ev.quality != null)   parts.push('AI quality: ' + Math.round(ev.quality * 100) + '%');
-  if (ev.scored_from)       parts.push('Scored from ' + ev.scored_from);
-  if (ev.fine_detail_flag)  parts.push('Very little fine detail (smeared or soft), so flagged');
-  if (ev.detail_fraction != null) parts.push(`Detail across ${Math.round(ev.detail_fraction * 100)}% of the frame`);
-  card.title = parts.join('\n');
+  if (ev.sharpness != null) parts.push("Sharpness measure: " + ev.sharpness);
+  if (ev.quality != null) parts.push("AI quality: " + Math.round(ev.quality * 100) + "%");
+  if (ev.scored_from) parts.push("Scored from " + ev.scored_from);
+  if (ev.fine_detail_flag) parts.push("Very little fine detail (smeared or soft), so flagged");
+  if (ev.detail_fraction != null)
+    parts.push(`Detail across ${Math.round(ev.detail_fraction * 100)}% of the frame`);
+  card.title = parts.join("\n");
   card.blurResult = ev;
 
   const tags = [];
-  if (isDamaged(ev))    tags.push(integrityTagHtml(ev));
+  if (isDamaged(ev)) tags.push(integrityTagHtml(ev));
   // One ⓘ per card, beside (not inside) its badge: after the Low detail tag when
   // there is one (that's what needs explaining first), else after the score badge
-  if (ev.low_detail)    tags.push('<span class="blur-tag">Low detail</span>' + blurInfoBubble('low_detail', 'Why low detail?'));
-  if (ev.error)         tags.push(`<span class="blur-tag" title="${escHtml(ev.error)}">Unreadable</span>`);
+  if (ev.low_detail)
+    tags.push(
+      '<span class="blur-tag">Low detail</span>' + blurInfoBubble("low_detail", "Why low detail?"),
+    );
+  if (ev.error) tags.push(`<span class="blur-tag" title="${escHtml(ev.error)}">Unreadable</span>`);
 
   card.innerHTML = `
     <div class="exif-card-thumb" data-lightbox="${escHtml(ev.filepath)}" title="Preview"><img class="exif-card-img" data-path="${escHtml(ev.filepath)}" data-src="${escHtml(thumbnailUrl(ev.filepath))}" alt="" onerror="this.parentElement.classList.add('exif-thumb-error')"></div>
     <div class="exif-card-meta">
       <a class="exif-card-filename card-filename-link" href="#" data-reveal="${escHtml(ev.filepath)}" title="Reveal in file manager">${escHtml(ev.filename)}</a>
       <div class="blur-card-tags">
-        ${ev.blur_score != null ? `<span class="blur-badge ${ev.low_detail ? 'unjudged' : blurBadgeClass(ev.blur_score)}">Blur ${Math.round(ev.blur_score)}</span>${ev.low_detail ? '' : blurInfoBubble('blur_score', 'About this score')}` : ''}
-        ${tags.join('')}
+        ${ev.blur_score != null ? `<span class="blur-badge ${ev.low_detail ? "unjudged" : blurBadgeClass(ev.blur_score)}">Blur ${Math.round(ev.blur_score)}</span>${ev.low_detail ? "" : blurInfoBubble("blur_score", "About this score")}` : ""}
+        ${tags.join("")}
       </div>
       <div class="exif-card-size">${formatSize(ev.file_size || 0)}</div>
     </div>
   `;
-  _thumbObserver.observe(card.querySelector('.exif-card-img'));
+  _thumbObserver.observe(card.querySelector(".exif-card-img"));
   refs.grid.appendChild(card);
 
   const blurry = isBlurry(ev);
   refs.total++;
-  if (blurry) { refs.blurry++; blurCounts.blurry++; }
-  if (isDamaged(ev)) { refs.damaged++; blurCounts.damaged++; }
+  if (blurry) {
+    refs.blurry++;
+    blurCounts.blurry++;
+  }
+  if (isDamaged(ev)) {
+    refs.damaged++;
+    blurCounts.damaged++;
+  }
   if (ev.low_detail) blurCounts.low++;
-  if (styleBlurCard(card)) refs.group.style.display = '';
+  if (styleBlurCard(card)) refs.group.style.display = "";
   renderBlurGroupBadge(refs);
   updateBlurSummary();
 }
 
 function upsertBlurFolderGroup(dir) {
   if (blurGroups.has(dir)) return blurGroups.get(dir);
-  document.getElementById('blur-section').style.display = 'block';
+  document.getElementById("blur-section").style.display = "block";
 
-  const group = document.createElement('div');
-  group.className = 'folder-group open';
-  const header = document.createElement('div');
-  header.className = 'folder-header';
+  const group = document.createElement("div");
+  group.className = "folder-group open";
+  const header = document.createElement("div");
+  header.className = "folder-header";
   header.onclick = () => toggleFolder(group);
   header.innerHTML = `
     <svg class="folder-chevron" viewBox="0 0 16 16" fill="currentColor">
@@ -159,18 +172,25 @@ function upsertBlurFolderGroup(dir) {
     <span class="folder-path" title="${escHtml(dir)}">${escHtml(dir)}</span>
     <div class="folder-counts"><span class="fc fc-issue"></span></div>
   `;
-  group.style.display = 'none';  // shown once it has a visible card
-  const body = document.createElement('div');
-  body.className = 'folder-body';
-  body.style.display = 'block';
-  const grid = document.createElement('div');
-  grid.className = 'exif-grid';
+  group.style.display = "none"; // shown once it has a visible card
+  const body = document.createElement("div");
+  body.className = "folder-body";
+  body.style.display = "block";
+  const grid = document.createElement("div");
+  grid.className = "exif-grid";
   body.appendChild(grid);
   group.appendChild(header);
   group.appendChild(body);
-  document.getElementById('blur-folder-list').appendChild(group);
+  document.getElementById("blur-folder-list").appendChild(group);
 
-  const refs = { group, grid, badge: header.querySelector('.fc-issue'), total: 0, blurry: 0, damaged: 0 };
+  const refs = {
+    group,
+    grid,
+    badge: header.querySelector(".fc-issue"),
+    total: 0,
+    blurry: 0,
+    damaged: 0,
+  };
   blurGroups.set(dir, refs);
   return refs;
 }
@@ -178,49 +198,67 @@ function upsertBlurFolderGroup(dir) {
 // ⓘ bubble on a Blur Check card; its pop-out (js/exif.js) is built from the
 // card's result when opened, so it reflects the current threshold
 function blurInfoBubble(kind, label) {
-  return ` <span class="info-bubble" role="button" tabindex="0" aria-label="${label}" aria-expanded="false"`
-    + ` aria-controls="info-pop" data-note-kind="${kind}">i</span>`;
+  return (
+    ` <span class="info-bubble" role="button" tabindex="0" aria-label="${label}" aria-expanded="false"` +
+    ` aria-controls="info-pop" data-note-kind="${kind}">i</span>`
+  );
 }
 
 // Pop-out text for a score: what it means at the current threshold, then what it was based on
 function blurScoreHelp(r, withHeading) {
   const score = Math.round(r.blur_score);
-  let html = '';
+  let html = "";
   if (withHeading) {
     if (isBlurry(r)) {
-      html += `<strong>Blur ${score}: counted as blurry</strong>`
-        + `<p>At or above your threshold of ${blurThreshold}. Check it yourself: open the photo and click it to zoom to 100%.</p>`;
+      html +=
+        `<strong>Blur ${score}: counted as blurry</strong>` +
+        `<p>At or above your threshold of ${blurThreshold}. Check it yourself: open the photo and click it to zoom to 100%.</p>`;
     } else if (score < BLUR_SHARP_BELOW) {
       html += `<strong>Blur ${score}: sharp</strong><p>Under ${BLUR_SHARP_BELOW} is typical for a sharp photo.</p>`;
     } else {
-      html += `<strong>Blur ${score}: not counted as blurry</strong>`
-        + `<p>Below your threshold of ${blurThreshold}. Scores from ${BLUR_SHARP_BELOW} up to the threshold are softer than most photos but usually still usable; lower the threshold to list more of them.</p>`;
+      html +=
+        `<strong>Blur ${score}: not counted as blurry</strong>` +
+        `<p>Below your threshold of ${blurThreshold}. Scores from ${BLUR_SHARP_BELOW} up to the threshold are softer than most photos but usually still usable; lower the threshold to list more of them.</p>`;
     }
-    html += '<p>Scores run from 0 (sharp) to 100 (very blurry). They rank photos against each other; they are not a percentage of blur.</p>';
+    html +=
+      "<p>Scores run from 0 (sharp) to 100 (very blurry). They rank photos against each other; they are not a percentage of blur.</p>";
   } else {
     html += `<p><b>Blur ${score}</b> (for reference only) was based on:</p>`;
   }
   const items = [];
   if (r.quality != null) {
-    items.push(`<b>AI quality ${Math.round(r.quality * 100)}%</b>: a trained image-quality model's rating (higher is better).`);
+    items.push(
+      `<b>AI quality ${Math.round(r.quality * 100)}%</b>: a trained image-quality model's rating (higher is better).`,
+    );
   } else {
-    items.push('<b>Basic scoring</b>: the AI quality model isn’t installed, so only the sharpness measure was used (less reliable across scenes).');
+    items.push(
+      "<b>Basic scoring</b>: the AI quality model isn’t installed, so only the sharpness measure was used (less reliable across scenes).",
+    );
   }
   if (r.sharpness != null) {
-    items.push(`<b>Sharpness ${r.sharpness}</b>: edge detail in the sharpest part of the photo (higher is sharper; the typical value depends on the scene).`);
+    items.push(
+      `<b>Sharpness ${r.sharpness}</b>: edge detail in the sharpest part of the photo (higher is sharper; the typical value depends on the scene).`,
+    );
   }
   if (r.detail_fraction != null) {
-    items.push(`<b>Detail across ${Math.round(r.detail_fraction * 100)}% of the frame</b> (under 20% counts as low detail).`);
+    items.push(
+      `<b>Detail across ${Math.round(r.detail_fraction * 100)}% of the frame</b> (under 20% counts as low detail).`,
+    );
   }
   if (r.fine_detail_flag) {
-    items.push('<b>Very little fine detail</b>: even its sharpest areas lack the finest texture, typical of camera shake, a soft export, or heavy noise reduction. This raised the score.');
+    items.push(
+      "<b>Very little fine detail</b>: even its sharpest areas lack the finest texture, typical of camera shake, a soft export, or heavy noise reduction. This raised the score.",
+    );
   }
   if (r.scored_from) {
-    items.push(`<b>Scored from ${escHtml(r.scored_from)}</b>: this RAW file’s built-in preview is too small to judge focus.`);
+    items.push(
+      `<b>Scored from ${escHtml(r.scored_from)}</b>: this RAW file’s built-in preview is too small to judge focus.`,
+    );
   }
-  html += '<ul>' + items.map(i => `<li>${i}</li>`).join('') + '</ul>';
+  html += "<ul>" + items.map((i) => `<li>${i}</li>`).join("") + "</ul>";
   if (isDamaged(r)) {
-    html += '<p class="info-pop-detail">This file is damaged, so the score only reflects the part that could be read.</p>';
+    html +=
+      '<p class="info-pop-detail">This file is damaged, so the score only reflects the part that could be read.</p>';
   }
   return html;
 }
@@ -228,36 +266,44 @@ function blurScoreHelp(r, withHeading) {
 // Badge colour by fixed score bands, independent of the threshold slider
 const BLUR_SHARP_BELOW = 15;
 function blurBadgeClass(score) {
-  score = Math.round(score);     // colour matches the number shown
-  if (score < BLUR_SHARP_BELOW) return 'sharp';
-  return score < BLUR_DEFAULT_THRESHOLD ? 'soft' : 'blurry';
+  score = Math.round(score); // colour matches the number shown
+  if (score < BLUR_SHARP_BELOW) return "sharp";
+  return score < BLUR_DEFAULT_THRESHOLD ? "soft" : "blurry";
 }
 
 // Highlight and show/hide one card for the current threshold; returns whether it's visible
 function styleBlurCard(card) {
   const blurry = isBlurry(card.blurResult);
   const damaged = isDamaged(card.blurResult);
-  const visible = blurry || damaged || document.getElementById('blur-show-all').checked;
-  card.classList.toggle('is-blurry', blurry);
-  card.classList.toggle('is-damaged', damaged);
-  card.style.display = visible ? '' : 'none';
+  const visible = blurry || damaged || document.getElementById("blur-show-all").checked;
+  card.classList.toggle("is-blurry", blurry);
+  card.classList.toggle("is-damaged", damaged);
+  card.style.display = visible ? "" : "none";
   return visible;
 }
 
 function renderBlurGroupBadge(refs) {
-  refs.badge.textContent = `${refs.blurry} blurry` + (refs.damaged ? `, ${refs.damaged} damaged` : '') + ` of ${refs.total}`;
+  refs.badge.textContent =
+    `${refs.blurry} blurry` +
+    (refs.damaged ? `, ${refs.damaged} damaged` : "") +
+    ` of ${refs.total}`;
 }
 
 function updateBlurSummary() {
   const { blurry, low, damaged } = blurCounts;
-  const parts = [`${blurry.toLocaleString()} of ${blurResults.length.toLocaleString()} photos blurry`];
+  const parts = [
+    `${blurry.toLocaleString()} of ${blurResults.length.toLocaleString()} photos blurry`,
+  ];
   if (damaged) parts.push(`${damaged.toLocaleString()} damaged`);
   // Unreadable or damaged files never reach the model, so check every result, not just the first
-  if (blurResults.length) parts.push(blurResults.some(r => r.method === 'ai') ? 'AI-assisted' : 'basic scoring');
-  if (low)     parts.push(`${low} low detail`);
-  document.getElementById('blur-summary-label').textContent = parts.join(' \u00b7 ');
-  document.getElementById('blur-empty').style.display =
-    (blurResults.length && !blurry && !damaged && !document.getElementById('blur-show-all').checked) ? 'block' : 'none';
+  if (blurResults.length)
+    parts.push(blurResults.some((r) => r.method === "ai") ? "AI-assisted" : "basic scoring");
+  if (low) parts.push(`${low} low detail`);
+  document.getElementById("blur-summary-label").textContent = parts.join(" \u00b7 ");
+  document.getElementById("blur-empty").style.display =
+    blurResults.length && !blurry && !damaged && !document.getElementById("blur-show-all").checked
+      ? "block"
+      : "none";
 }
 
 // Full recount: after the threshold or "Show all" changes
@@ -279,28 +325,33 @@ function applyBlurThreshold() {
       if (isDamaged(card.blurResult)) refs.damaged++;
     }
     renderBlurGroupBadge(refs);
-    refs.group.style.display = visible ? '' : 'none';
+    refs.group.style.display = visible ? "" : "none";
   }
   updateBlurSummary();
 }
 
 function syncBlurSlider() {
-  document.getElementById('blur-threshold').value = blurThreshold;
-  document.getElementById('blur-threshold-value').textContent = blurThreshold;
+  document.getElementById("blur-threshold").value = blurThreshold;
+  document.getElementById("blur-threshold-value").textContent = blurThreshold;
 }
 
 function setBlurThreshold(value) {
   blurThreshold = Math.max(0, Math.min(100, parseInt(value, 10) || 0));
-  try { localStorage.setItem(BLUR_THRESHOLD_KEY, String(blurThreshold)); } catch(e) {}
+  try {
+    localStorage.setItem(BLUR_THRESHOLD_KEY, String(blurThreshold));
+  } catch (e) {}
   syncBlurSlider();
   applyBlurThreshold();
 }
 
 // Blurriest first within each folder; low-detail and unscored photos last
 function sortBlurCards() {
-  const key = c => (c.blurResult.blur_score == null || c.blurResult.low_detail) ? -1 : c.blurResult.blur_score;
+  const key = (c) =>
+    c.blurResult.blur_score == null || c.blurResult.low_detail ? -1 : c.blurResult.blur_score;
   for (const refs of blurGroups.values()) {
-    [...refs.grid.children].sort((a, b) => key(b) - key(a)).forEach(c => refs.grid.appendChild(c));
+    [...refs.grid.children]
+      .sort((a, b) => key(b) - key(a))
+      .forEach((c) => refs.grid.appendChild(c));
   }
 }
 
@@ -309,44 +360,59 @@ let qualityPollTimer = null;
 
 async function refreshQualityModelStatus() {
   let st;
-  try { st = await (await fetch('/api/quality-model')).json(); } catch(e) { return; }
-  const el = document.getElementById('blur-model-status');
+  try {
+    st = await (await fetch("/api/quality-model")).json();
+  } catch (e) {
+    return;
+  }
+  const el = document.getElementById("blur-model-status");
   const dl = st.download || {};
-  const mb = n => (n / 1048576).toFixed(0);
-  el.className = 'blur-model-status';
+  const mb = (n) => (n / 1048576).toFixed(0);
+  el.className = "blur-model-status";
   clearTimeout(qualityPollTimer);
 
-  if (dl.state === 'downloading' || dl.state === 'verifying') {
-    const pct = st.model_bytes ? Math.min(100, Math.round(dl.received / st.model_bytes * 100)) : 0;
-    el.textContent = dl.state === 'verifying'
-      ? 'Verifying the AI quality model\u2026'
-      : `Downloading the AI quality model\u2026 ${pct}% (${mb(dl.received)} of ${mb(st.model_bytes)} MB)`;
+  if (dl.state === "downloading" || dl.state === "verifying") {
+    const pct = st.model_bytes
+      ? Math.min(100, Math.round((dl.received / st.model_bytes) * 100))
+      : 0;
+    el.textContent =
+      dl.state === "verifying"
+        ? "Verifying the AI quality model\u2026"
+        : `Downloading the AI quality model\u2026 ${pct}% (${mb(dl.received)} of ${mb(st.model_bytes)} MB)`;
     qualityPollTimer = setTimeout(refreshQualityModelStatus, 500);
   } else if (st.available) {
-    el.classList.add('ai');
-    el.textContent = dl.state === 'done'
-      ? 'AI quality model installed. Run Blur Check again to use it.'
-      : 'AI-assisted scoring: a trained image-quality model (CLIP-IQA+) combined with the sharpness measure.';
+    el.classList.add("ai");
+    el.textContent =
+      dl.state === "done"
+        ? "AI quality model installed. Run Blur Check again to use it."
+        : "AI-assisted scoring: a trained image-quality model (CLIP-IQA+) combined with the sharpness measure.";
   } else if (!st.runtime_installed) {
-    el.textContent = 'Basic scoring. The AI quality model needs onnxruntime (pip install onnxruntime); restart the app after installing it.';
+    el.textContent =
+      "Basic scoring. The AI quality model needs onnxruntime (pip install onnxruntime); restart the app after installing it.";
   } else {
     const canDownload = !!st.download_url;
-    const failed = dl.state === 'error';
+    const failed = dl.state === "error";
     if (failed) {
       // Plain explanation, the technical cause on hover, and a way around the
       // app's download (a browser may get through where curl can't)
-      el.innerHTML = `<span title="${escHtml(dl.detail || '')}"><strong>Download failed.</strong> ${escHtml(dl.error || 'Unknown error.')}</span>`
-        + (canDownload ? ' <button class="btn-outline" onclick="downloadQualityModel()">Try again</button>'
-            + `<span class="blur-model-alt">Or <a href="${escHtml(st.download_url)}" target="_blank" rel="noopener">download it in your browser</a>`
-            + ' and put it in the app\'s <code>models</code> folder, then run Blur Check again. Until then, it uses basic scoring.</span>'
-          : '');
-      el.classList.add('error');
+      el.innerHTML =
+        `<span title="${escHtml(dl.detail || "")}"><strong>Download failed.</strong> ${escHtml(dl.error || "Unknown error.")}</span>` +
+        (canDownload
+          ? ' <button class="btn-outline" onclick="downloadQualityModel()">Try again</button>' +
+            `<span class="blur-model-alt">Or <a href="${escHtml(st.download_url)}" target="_blank" rel="noopener">download it in your browser</a>` +
+            " and put it in the app's <code>models</code> folder, then run Blur Check again. Until then, it uses basic scoring.</span>"
+          : "");
+      el.classList.add("error");
     } else {
-      el.innerHTML = `<span>Basic scoring. For more reliable results across cameras and scenes, add the AI quality model (${mb(st.model_bytes)} MB, one-time download).</span>`
-        + (canDownload ? ' <button class="btn-outline" onclick="downloadQualityModel()">Download model</button>'
-                       : ' <span>Set QUALITY_MODEL_URL in app.conf to enable the download.</span>');
+      el.innerHTML =
+        `<span>Basic scoring. For more reliable results across cameras and scenes, add the AI quality model (${mb(st.model_bytes)} MB, one-time download).</span>` +
+        (canDownload
+          ? ' <button class="btn-outline" onclick="downloadQualityModel()">Download model</button>'
+          : " <span>Set QUALITY_MODEL_URL in app.conf to enable the download.</span>");
     }
-    el.querySelectorAll('button').forEach(b => { b.disabled = busyMode !== null; });
+    el.querySelectorAll("button").forEach((b) => {
+      b.disabled = busyMode !== null;
+    });
   }
 }
 
@@ -354,57 +420,83 @@ async function refreshQualityModelStatus() {
 // the model file in Finder), so the panel doesn't wait for the next Blur Check
 // (focus: switching back from Finder; visibilitychange: back from another tab).
 function recheckQualityModel() {
-  if (document.visibilityState === 'visible'
-      && document.getElementById('blur-section').style.display !== 'none') {
+  if (
+    document.visibilityState === "visible" &&
+    document.getElementById("blur-section").style.display !== "none"
+  ) {
     refreshQualityModelStatus();
   }
 }
-window.addEventListener('focus', recheckQualityModel);
-document.addEventListener('visibilitychange', recheckQualityModel);
+window.addEventListener("focus", recheckQualityModel);
+document.addEventListener("visibilitychange", recheckQualityModel);
 
 async function downloadQualityModel() {
-  try { await fetch('/api/quality-model/download', { method: 'POST' }); } catch(e) {}
+  try {
+    await fetch("/api/quality-model/download", { method: "POST" });
+  } catch (e) {}
   refreshQualityModelStatus();
 }
 
 function cancelBlurScan() {
-  document.getElementById('cancel-btn').disabled = true;
-  document.getElementById('p-current').textContent = 'Cancelling\u2026';
-  fetch('/api/blur-cancel', { method: 'POST' }).catch(() => blurDone());
+  document.getElementById("cancel-btn").disabled = true;
+  document.getElementById("p-current").textContent = "Cancelling\u2026";
+  fetch("/api/blur-cancel", { method: "POST" }).catch(() => blurDone());
 }
 
 function blurDone() {
-  if (blurEventSource) { blurEventSource.close(); blurEventSource = null; }
+  if (blurEventSource) {
+    blurEventSource.close();
+    blurEventSource = null;
+  }
   setBusy(null);
   applyBlurThreshold();
 }
 
 function exportBlurData() {
-  const header = ['Filename', 'Directory', 'Full Path', 'Blur Score', 'Sharpness', 'AI Quality', 'Method',
-                  `Blurry (threshold ${blurThreshold})`, 'Low Detail', 'Detail %', 'Integrity', 'Integrity Issue', 'Error'];
+  const header = [
+    "Filename",
+    "Directory",
+    "Full Path",
+    "Blur Score",
+    "Sharpness",
+    "AI Quality",
+    "Method",
+    `Blurry (threshold ${blurThreshold})`,
+    "Low Detail",
+    "Detail %",
+    "Integrity",
+    "Integrity Issue",
+    "Error",
+  ];
   const rows = [header];
   for (const r of blurResults) {
     rows.push([
-      r.filename, r.dir, r.filepath,
-      r.blur_score != null ? r.blur_score : '',
-      r.sharpness  != null ? r.sharpness  : '',
-      r.quality    != null ? r.quality    : '',
-      r.method === 'ai' ? 'AI-assisted' : 'Basic',
-      isBlurry(r) ? 'Yes' : 'No',
-      r.low_detail ? 'Yes' : 'No',
-      r.detail_fraction != null ? Math.round(r.detail_fraction * 100) : '',
+      r.filename,
+      r.dir,
+      r.filepath,
+      r.blur_score != null ? r.blur_score : "",
+      r.sharpness != null ? r.sharpness : "",
+      r.quality != null ? r.quality : "",
+      r.method === "ai" ? "AI-assisted" : "Basic",
+      isBlurry(r) ? "Yes" : "No",
+      r.low_detail ? "Yes" : "No",
+      r.detail_fraction != null ? Math.round(r.detail_fraction * 100) : "",
       ...integrityCsvCells(r),
-      r.error || '',
+      r.error || "",
     ]);
   }
-  const csv  = '\ufeff' + rows.map(row =>
-    row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')
-  ).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'blur_check.csv';
-  document.body.appendChild(a); a.click();
+  const csv =
+    "\ufeff" +
+    rows
+      .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(","))
+      .join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "blur_check.csv";
+  document.body.appendChild(a);
+  a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }

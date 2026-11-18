@@ -28,10 +28,10 @@ log = logging.getLogger(__name__)
 # run in parallel. LibRaw is C, so a crash on a badly damaged file now only
 # kills a worker (replaced on the next file), not the server.
 RAW_CHECK_PROCESSES = WORKER_THREADS
-_POOL_START_TIMEOUT = 60   # seconds for the worker processes to answer a first ping
+_POOL_START_TIMEOUT = 60  # seconds for the worker processes to answer a first ping
 
 _raw_pool = None
-_raw_pool_usable = True   # False once worker processes have failed to start
+_raw_pool_usable = True  # False once worker processes have failed to start
 _raw_pool_lock = threading.Lock()
 
 
@@ -42,19 +42,26 @@ def _pool_ping():
 def _exit_with_parent(parent_pid):
     """Worker process start-up: exit as soon as the server that started it is
     gone, however it ended (stop, crash, kill -9), instead of lingering."""
+
     def watch():
         while os.getppid() == parent_pid:
             time.sleep(2)
         os._exit(0)
+
     threading.Thread(target=watch, daemon=True).start()
 
 
 def _spawn_pool(workers):
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
+
     # spawn: fresh processes (macOS's default; fork is unsafe with threads)
-    return ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context('spawn'),
-                               initializer=_exit_with_parent, initargs=(os.getpid(),))
+    return ProcessPoolExecutor(
+        max_workers=workers,
+        mp_context=multiprocessing.get_context("spawn"),
+        initializer=_exit_with_parent,
+        initargs=(os.getpid(),),
+    )
 
 
 def _get_raw_pool():
@@ -67,11 +74,13 @@ def _get_raw_pool():
             try:
                 pool.submit(_pool_ping).result(timeout=_POOL_START_TIMEOUT)
                 _raw_pool = pool
-                log.info(f'RAW integrity checks: {RAW_CHECK_PROCESSES} worker processes started')
+                log.info(f"RAW integrity checks: {RAW_CHECK_PROCESSES} worker processes started")
             except Exception as e:
                 pool.shutdown(wait=False, cancel_futures=True)
                 _raw_pool_usable = False
-                log.warning(f'RAW integrity checks will run one at a time: worker processes failed to start ({e!r}).')
+                log.warning(
+                    f"RAW integrity checks will run one at a time: worker processes failed to start ({e!r})."
+                )
         return _raw_pool
 
 
@@ -86,6 +95,7 @@ def _discard_raw_pool(pool):
 
 def _check_raw_isolated(filepath: str):
     from concurrent.futures.process import BrokenProcessPool
+
     pool = _get_raw_pool()
     if pool is None:
         return check_raw(filepath)
@@ -96,14 +106,16 @@ def _check_raw_isolated(filepath: str):
         # that crashed it. Retry this file on its own: only a crash there
         # means this file crashes the decoder.
         _discard_raw_pool(pool)
-        log.warning(f'A RAW worker process died; checking {filepath} again on its own')
+        log.warning(f"A RAW worker process died; checking {filepath} again on its own")
         solo = _spawn_pool(1)
         try:
             return solo.submit(check_raw, filepath).result()
         except BrokenProcessPool:
-            log.warning(f'The RAW decoder crashes on {filepath}: reported as corrupt')
-            return 'corrupt', ('The RAW decoder crashed reading this file, which usually means '
-                               'its image data is badly damaged')
+            log.warning(f"The RAW decoder crashes on {filepath}: reported as corrupt")
+            return "corrupt", (
+                "The RAW decoder crashed reading this file, which usually means "
+                "its image data is badly damaged"
+            )
         finally:
             solo.shutdown(wait=False)
 
@@ -116,7 +128,7 @@ def check_integrity(filepath: str) -> dict:
     It fully decodes the file (including RAW sensor data), so it's the slow
     part of any scan that uses it."""
     status, reason = check_image(filepath)
-    return {'integrity': status, 'integrity_reason': reason}
+    return {"integrity": status, "integrity_reason": reason}
 
 
 def check_image(filepath: str):
