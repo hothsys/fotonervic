@@ -84,7 +84,7 @@ def _parse_heif_structure(filepath: str):
             elif typ == b"iinf":
                 version = meta[start]
                 first = start + (6 if version == 0 else 8)
-                for t2, s2, e2 in _iter_boxes(meta, first, end):
+                for t2, s2, _e2 in _iter_boxes(meta, first, end):
                     if t2 != b"infe" or meta[s2] < 2:
                         continue
                     id_len = 2 if meta[s2] == 2 else 4
@@ -178,10 +178,10 @@ def check_heic(filepath: str):
                     "(pip install pillow-heif). Container structure looks intact.",
                 )
             if "truncated" in err_lower:
-                return "partial", f"Truncated HEIC file: {str(e)}"
-            return "corrupt", f"HEIC decode error: {str(e)}"
+                return "partial", f"Truncated HEIC file: {e!s}"
+            return "corrupt", f"HEIC decode error: {e!s}"
 
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"

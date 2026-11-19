@@ -1,5 +1,6 @@
 """RAW integrity check."""
 
+import contextlib
 import io
 import os
 import re
@@ -36,7 +37,7 @@ def check_raw(filepath: str):
                         f"({file_size} bytes) and has no valid TIFF header"
                     )
                 return "corrupt", (
-                    f"No valid TIFF/RAW header found; file data appears to be completely corrupt"
+                    "No valid TIFF/RAW header found; file data appears to be completely corrupt"
                 )
 
             if tiff["has_exif"] and not tiff["has_image_data_tags"]:
@@ -80,10 +81,8 @@ def check_raw(filepath: str):
                             rawpy_stderr = _tf.read()
                     except Exception:
                         pass
-                    try:
+                    with contextlib.suppress(Exception):
                         os.unlink(tmp_path)
-                    except Exception:
-                        pass
 
             return "ok", None
 
@@ -112,7 +111,7 @@ def check_raw(filepath: str):
                         "(pip install rawpy). "
                         "PIL also could not read this file."
                     )
-                return "corrupt", f"RAW read error (PIL fallback): {str(e)}"
+                return "corrupt", f"RAW read error (PIL fallback): {e!s}"
 
         except Exception as e:
             err = str(e)
@@ -224,4 +223,4 @@ def check_raw(filepath: str):
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"

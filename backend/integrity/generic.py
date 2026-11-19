@@ -22,5 +22,5 @@ def check_generic_pillow(filepath: str):
     except Exception as e:
         err_lower = str(e).lower()
         if "truncated" in err_lower or "incomplete" in err_lower:
-            return "partial", f"Image data truncated: {str(e)}"
-        return "corrupt", f"Decode error: {str(e)}"
+            return "partial", f"Image data truncated: {e!s}"
+        return "corrupt", f"Decode error: {e!s}"

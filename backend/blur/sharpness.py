@@ -104,6 +104,6 @@ def _fine_detail(gray):
     if len(ratios) < 3:
         return None
     ratios = np.array(ratios)
-    k = max(3, int(round(FINE_DETAIL_TOP_FRAC * len(ratios))))
+    k = max(3, round(FINE_DETAIL_TOP_FRAC * len(ratios)))
     top = ratios[np.argsort(ratios.max(axis=1))[-k:]]  # patches sharpest in their best direction
     return float(top.mean())

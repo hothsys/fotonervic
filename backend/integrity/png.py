@@ -47,10 +47,10 @@ def check_png(filepath: str):
         except Exception as e:
             err_lower = str(e).lower()
             if "truncated" in err_lower or "decompression" in err_lower:
-                return "partial", f"PNG data truncated or corrupt: {str(e)}"
-            return "corrupt", f"Decode error: {str(e)}"
+                return "partial", f"PNG data truncated or corrupt: {e!s}"
+            return "corrupt", f"Decode error: {e!s}"
 
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"

@@ -337,25 +337,29 @@ def _find_best_embedded_preview(filepath: str):
                         jpeg_len = val
 
                 # Compression 6 = old-style JPEG, 7 = new-style JPEG
-                if compression in (6, 7) and jpeg_off and jpeg_len:
-                    if jpeg_off + jpeg_len <= file_size:
-                        pixels = width * height if width and height else 0
-                        if not best or pixels > best[0] * best[1]:
-                            # If width/height not in IFD, decode JPEG header
-                            if not width or not height:
-                                pos = f.tell()
-                                f.seek(jpeg_off)
-                                jdata = f.read(min(jpeg_len, 65536))
-                                f.seek(pos)
-                                try:
-                                    from PIL import Image as _Img
+                if (
+                    compression in (6, 7)
+                    and jpeg_off
+                    and jpeg_len
+                    and jpeg_off + jpeg_len <= file_size
+                ):
+                    pixels = width * height if width and height else 0
+                    if not best or pixels > best[0] * best[1]:
+                        # If width/height not in IFD, decode JPEG header
+                        if not width or not height:
+                            pos = f.tell()
+                            f.seek(jpeg_off)
+                            jdata = f.read(min(jpeg_len, 65536))
+                            f.seek(pos)
+                            try:
+                                from PIL import Image as _Img
 
-                                    tmp = _Img.open(io.BytesIO(jdata))
-                                    width, height = tmp.size
-                                except Exception:
-                                    width = height = 0
-                            if width and height:
-                                best = (width, height, jpeg_off, jpeg_len)
+                                tmp = _Img.open(io.BytesIO(jdata))
+                                width, height = tmp.size
+                            except Exception:
+                                width = height = 0
+                        if width and height:
+                            best = (width, height, jpeg_off, jpeg_len)
 
             # Walk main IFD chain and collect SubIFD offsets
             sub_ifd_offsets = []

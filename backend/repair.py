@@ -144,7 +144,7 @@ def salvage_jpeg(filepath: str):
             img = Image.open(io.BytesIO(reconstructed))
             img.load()
         except Exception as e:
-            raise ValueError(f"Failed to decode with embedded tables: {e}")
+            raise ValueError(f"Failed to decode with embedded tables: {e}") from e
         finally:
             ImageFile.LOAD_TRUNCATED_IMAGES = False
 
@@ -202,7 +202,7 @@ def salvage_jpeg(filepath: str):
         img = Image.open(io.BytesIO(bytes(buf)))
         img.load()
     except Exception as e:
-        raise ValueError(f"Failed to decode grafted image: {e}")
+        raise ValueError(f"Failed to decode grafted image: {e}") from e
     finally:
         ImageFile.LOAD_TRUNCATED_IMAGES = False
 
@@ -254,7 +254,7 @@ def salvage_jpeg(filepath: str):
             center = (P_min + P_max) // 2
             P = min(candidates, key=lambda p: abs(p - center))
 
-        if P < 0 or P >= total_mcus:
+        if P < 0 or total_mcus <= P:
             P = max(0, P_row * mcu_cols)
 
         # Step 3: MCU-level remap

@@ -63,9 +63,9 @@ def main():
     )
     fetch_weights(torch_home)
 
+    import pyiqa
     import torch
     import torch.nn as nn
-    import pyiqa
 
     metric = pyiqa.create_metric("clipiqa+", device="cpu")
     net = metric.net.eval()
@@ -124,7 +124,8 @@ def main():
     if abs(got - ref) > 1e-4:
         sys.exit(f"ONNX mismatch: pyiqa {ref:.6f} vs onnxruntime {got:.6f}")
 
-    digest = hashlib.sha256(open(out, "rb").read()).hexdigest()
+    with open(out, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
     print(f"Wrote {out} ({os.path.getsize(out) / 1048576:.1f} MB)")
     print(f"SHA-256 {digest}")
 

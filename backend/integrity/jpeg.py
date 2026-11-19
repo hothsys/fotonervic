@@ -46,7 +46,7 @@ def check_jpeg(filepath: str):
         # is complete regardless of whether an EOI marker is present.
         # (Many cameras/apps append large amounts of data after EOI.)
         try:
-            from PIL import Image, ImageFile
+            from PIL import Image
 
             # Do NOT set LOAD_TRUNCATED_IMAGES so truncated files raise exceptions
             img = Image.open(filepath)
@@ -63,6 +63,6 @@ def check_jpeg(filepath: str):
     except PermissionError:
         return "error", "Permission denied reading file"
     except OSError as e:
-        return "error", f"OS error: {str(e)}"
+        return "error", f"OS error: {e!s}"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"

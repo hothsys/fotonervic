@@ -1,16 +1,17 @@
 """EXIF extraction, orientation, and the Exif Info scan."""
 
+import contextlib
 import os
 import re
 import threading
 import time
 from pathlib import Path
 
-from backend.jobs import log_scan, run_in_threads
 from backend.exiftool import read_metadata
 from backend.formats import HEIC_EXTS, RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
 from backend.integrity.heic import _parse_heif_structure
+from backend.jobs import log_scan, run_in_threads
 
 # ─── EXIF extraction ──────────────────────────────────────────────────────────
 # Metadata is read by ExifTool (backend/exiftool.py). The functions below are
@@ -484,10 +485,8 @@ def exif_scan_gen(root_dir: str, cancel: threading.Event):
     def _exif_worker(dp, fname):
         filepath = os.path.join(dp, fname)
         file_size = 0
-        try:
+        with contextlib.suppress(OSError):
             file_size = os.path.getsize(filepath)
-        except OSError:
-            pass
         exif = extract_exif(filepath)
         exif.update(check_integrity(filepath))
         return dp, fname, filepath, file_size, exif

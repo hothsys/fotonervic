@@ -42,6 +42,7 @@ def run_in_threads(fn, items, cancel, workers=None):
     slowest file). Stops starting new items once cancel is set; leaving the
     loop early cancels whatever hasn't started."""
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
     from backend.config import WORKER_THREADS
 
     workers = workers or WORKER_THREADS
