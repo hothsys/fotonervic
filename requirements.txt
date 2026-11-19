@@ -5,7 +5,7 @@
 
 # The fast installer app.py uses for everything below (pip installs it first;
 # without it, app.py falls back to pip)
-uv>=0.13.7  # optional
+uv>=0.13.8  # optional
 
 # Required
 Pillow>=13.0.0
