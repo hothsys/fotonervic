@@ -31,7 +31,9 @@ function startExifScan() {
   }
   rememberScanDir(dir);
 
-  Object.keys(exifData).forEach((k) => delete exifData[k]);
+  Object.keys(exifData).forEach((k) => {
+    delete exifData[k];
+  });
   exifGrids.clear();
   document.getElementById("exif-folder-list").innerHTML = "";
   hideExifResults();
@@ -52,7 +54,7 @@ function startExifScan() {
   document.getElementById("p-current").classList.add("scanning-pulse");
 
   if (exifEventSource) exifEventSource.close();
-  exifEventSource = new EventSource("/api/exif-scan?dir=" + encodeURIComponent(dir));
+  exifEventSource = new EventSource(`/api/exif-scan?dir=${encodeURIComponent(dir)}`);
   exifEventSource.onmessage = (e) => handleExifEvent(JSON.parse(e.data));
   exifEventSource.onerror = () => exifDone();
 }
@@ -64,17 +66,17 @@ function handleExifEvent(ev) {
       break;
     case "scanning": {
       const pct = ev.total > 0 ? ((ev.scanned / ev.total) * 100).toFixed(1) : 0;
-      document.getElementById("p-bar").style.width = pct + "%";
+      document.getElementById("p-bar").style.width = `${pct}%`;
       document.getElementById("p-scanned").textContent = ev.scanned.toLocaleString();
-      document.getElementById("p-eta").textContent = pct + "% complete";
-      document.getElementById("p-current").textContent = ev.dir + "  /  " + ev.file;
+      document.getElementById("p-eta").textContent = `${pct}% complete`;
+      document.getElementById("p-current").textContent = `${ev.dir}  /  ${ev.file}`;
       break;
     }
     case "exif_result":
       addExifCard(ev);
       break;
     case "error":
-      alert("EXIF scan error: " + ev.message);
+      alert(`EXIF scan error: ${ev.message}`);
       exifDone();
       break;
     case "cancelled":
@@ -145,9 +147,9 @@ function metadataNoteHelp(bubble) {
 function closeInfoPop() {
   const pop = document.getElementById("info-pop");
   if (pop) pop.hidden = true;
-  document
-    .querySelectorAll('.info-bubble[aria-expanded="true"]')
-    .forEach((b) => b.setAttribute("aria-expanded", "false"));
+  document.querySelectorAll('.info-bubble[aria-expanded="true"]').forEach((b) => {
+    b.setAttribute("aria-expanded", "false");
+  });
 }
 
 function toggleInfoPop(bubble) {
@@ -174,13 +176,12 @@ function toggleInfoPop(bubble) {
     roomAbove = r.top - 2 * gap;
   const below = pr.height <= roomBelow || roomBelow >= roomAbove;
   const height = Math.min(pr.height, below ? roomBelow : roomAbove);
-  if (height < pr.height) pop.style.maxHeight = height + "px";
-  pop.style.left =
-    Math.min(
-      Math.max(gap, r.left + r.width / 2 - pr.width / 2),
-      window.innerWidth - pr.width - gap,
-    ) + "px";
-  pop.style.top = (below ? r.bottom + gap : r.top - gap - height) + "px";
+  if (height < pr.height) pop.style.maxHeight = `${height}px`;
+  pop.style.left = `${Math.min(
+    Math.max(gap, r.left + r.width / 2 - pr.width / 2),
+    window.innerWidth - pr.width - gap,
+  )}px`;
+  pop.style.top = `${below ? r.bottom + gap : r.top - gap - height}px`;
 }
 
 document.addEventListener("click", (e) => {
@@ -194,7 +195,7 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest("#info-pop")) closeInfoPop();
 });
 document.addEventListener("keydown", (e) => {
-  const bubble = e.target.closest && e.target.closest(".info-bubble");
+  const bubble = e.target.closest?.(".info-bubble");
   if (bubble && (e.key === "Enter" || e.key === " ")) {
     e.preventDefault();
     toggleInfoPop(bubble);
@@ -204,7 +205,7 @@ window.addEventListener(
   "scroll",
   (e) => {
     // the page scrolled, not the pop-out's own text
-    if (!(e.target.closest && e.target.closest("#info-pop"))) closeInfoPop();
+    if (!e.target.closest?.("#info-pop")) closeInfoPop();
   },
   true,
 );
@@ -217,7 +218,7 @@ function addExifCard(ev) {
   exifData[ev.dir].count++;
 
   const refs = exifGrids.get(ev.dir);
-  const grid = refs && refs.grid;
+  const grid = refs?.grid;
   if (!grid) return;
 
   const hasExif = ev.has_exif;
@@ -225,13 +226,13 @@ function addExifCard(ev) {
   // Skip the make when the model already names the brand ("Canon EOS R5", "NIKON D810")
   const brand = (ev.make || "").split(" ")[0].toLowerCase();
   const camera =
-    brand && ev.model && ev.model.toLowerCase().startsWith(brand)
+    brand && ev.model?.toLowerCase().startsWith(brand)
       ? ev.model
       : [ev.make, ev.model].filter(Boolean).join(" ") || null;
-  const settings = [ev.aperture, ev.shutter, ev.iso ? "ISO " + ev.iso : null, ev.focal_length]
+  const settings = [ev.aperture, ev.shutter, ev.iso ? `ISO ${ev.iso}` : null, ev.focal_length]
     .filter(Boolean)
     .join(" · ");
-  const dims = ev.width && ev.height ? ev.width + " × " + ev.height : null;
+  const dims = ev.width && ev.height ? `${ev.width} × ${ev.height}` : null;
   const thumbUrl = thumbnailUrl(ev.filepath);
 
   const damaged = isDamaged(ev);
@@ -240,7 +241,7 @@ function addExifCard(ev) {
     exifDamagedTotal++;
   }
   const card = document.createElement("div");
-  card.className = "exif-card" + (hasExif ? "" : " no-exif") + (damaged ? " is-damaged" : "");
+  card.className = `exif-card${hasExif ? "" : " no-exif"}${damaged ? " is-damaged" : ""}`;
   card.title = ev.filepath;
 
   const thumbHtml = isVideo
@@ -275,11 +276,10 @@ function addExifCard(ev) {
   grid.appendChild(card);
 
   // Update folder file count
-  const badge = refs && refs.badge;
+  const badge = refs?.badge;
   if (badge) {
     const d = exifData[ev.dir];
-    badge.textContent =
-      d.count + " file" + (d.count !== 1 ? "s" : "") + (d.damaged ? `, ${d.damaged} damaged` : "");
+    badge.textContent = `${d.count} file${d.count !== 1 ? "s" : ""}${d.damaged ? `, ${d.damaged} damaged` : ""}`;
   }
 }
 
@@ -396,7 +396,7 @@ function exportExifData() {
   const csv =
     "﻿" +
     rows
-      .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(","))
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

@@ -57,7 +57,7 @@ function startBlurScan() {
   document.getElementById("p-current").classList.add("scanning-pulse");
 
   if (blurEventSource) blurEventSource.close();
-  blurEventSource = new EventSource("/api/blur-scan?dir=" + encodeURIComponent(dir));
+  blurEventSource = new EventSource(`/api/blur-scan?dir=${encodeURIComponent(dir)}`);
   blurEventSource.onmessage = (e) => handleBlurEvent(JSON.parse(e.data));
   blurEventSource.onerror = () => blurDone();
 }
@@ -69,10 +69,10 @@ function handleBlurEvent(ev) {
       break;
     case "scanning": {
       const pct = ev.total > 0 ? ((ev.scanned / ev.total) * 100).toFixed(1) : 0;
-      document.getElementById("p-bar").style.width = pct + "%";
+      document.getElementById("p-bar").style.width = `${pct}%`;
       document.getElementById("p-scanned").textContent = ev.scanned.toLocaleString();
-      document.getElementById("p-eta").textContent = pct + "% complete";
-      document.getElementById("p-current").textContent = ev.dir + "  /  " + ev.file;
+      document.getElementById("p-eta").textContent = `${pct}% complete`;
+      document.getElementById("p-current").textContent = `${ev.dir}  /  ${ev.file}`;
       break;
     }
     case "blur_result":
@@ -80,7 +80,7 @@ function handleBlurEvent(ev) {
       document.getElementById("p-issues").textContent = blurCounts.blurry.toLocaleString();
       break;
     case "error":
-      alert("Blur check error: " + ev.message);
+      alert(`Blur check error: ${ev.message}`);
       blurDone();
       break;
     case "cancelled":
@@ -104,9 +104,9 @@ function addBlurCard(ev) {
   const card = document.createElement("div");
   card.className = "exif-card blur-card";
   const parts = [ev.filepath];
-  if (ev.sharpness != null) parts.push("Sharpness measure: " + ev.sharpness);
-  if (ev.quality != null) parts.push("AI quality: " + Math.round(ev.quality * 100) + "%");
-  if (ev.scored_from) parts.push("Scored from " + ev.scored_from);
+  if (ev.sharpness != null) parts.push(`Sharpness measure: ${ev.sharpness}`);
+  if (ev.quality != null) parts.push(`AI quality: ${Math.round(ev.quality * 100)}%`);
+  if (ev.scored_from) parts.push(`Scored from ${ev.scored_from}`);
   if (ev.fine_detail_flag) parts.push("Very little fine detail (smeared or soft), so flagged");
   if (ev.detail_fraction != null)
     parts.push(`Detail across ${Math.round(ev.detail_fraction * 100)}% of the frame`);
@@ -119,7 +119,7 @@ function addBlurCard(ev) {
   // there is one (that's what needs explaining first), else after the score badge
   if (ev.low_detail)
     tags.push(
-      '<span class="blur-tag">Low detail</span>' + blurInfoBubble("low_detail", "Why low detail?"),
+      `<span class="blur-tag">Low detail</span>${blurInfoBubble("low_detail", "Why low detail?")}`,
     );
   if (ev.error) tags.push(`<span class="blur-tag" title="${escHtml(ev.error)}">Unreadable</span>`);
 
@@ -255,7 +255,7 @@ function blurScoreHelp(r, withHeading) {
       `<b>Scored from ${escHtml(r.scored_from)}</b>: this RAW file’s built-in preview is too small to judge focus.`,
     );
   }
-  html += "<ul>" + items.map((i) => `<li>${i}</li>`).join("") + "</ul>";
+  html += `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
   if (isDamaged(r)) {
     html +=
       '<p class="info-pop-detail">This file is damaged, so the score only reflects the part that could be read.</p>';
@@ -351,7 +351,9 @@ function sortBlurCards() {
   for (const refs of blurGroups.values()) {
     [...refs.grid.children]
       .sort((a, b) => key(b) - key(a))
-      .forEach((c) => refs.grid.appendChild(c));
+      .forEach((c) => {
+        refs.grid.appendChild(c);
+      });
   }
 }
 
@@ -488,7 +490,7 @@ function exportBlurData() {
   const csv =
     "\ufeff" +
     rows
-      .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(","))
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

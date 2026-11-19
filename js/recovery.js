@@ -11,7 +11,7 @@ function extractPreview(btn) {
   xhr.setRequestHeader("Content-Type", "application/json");
   xhr.responseType = "blob";
 
-  xhr.onload = function () {
+  xhr.onload = () => {
     if (xhr.status === 200) {
       var filename = xhr.getResponseHeader("X-Filename") || "preview.jpg";
       var url = URL.createObjectURL(xhr.response);
@@ -26,7 +26,7 @@ function extractPreview(btn) {
       btn.textContent = "Exported!";
       btn.style.color = "var(--green)";
       btn.style.borderColor = "var(--green)";
-      setTimeout(function () {
+      setTimeout(() => {
         btn.textContent = "Export Preview";
         btn.style.color = "";
         btn.style.borderColor = "";
@@ -36,7 +36,7 @@ function extractPreview(btn) {
       btn.textContent = "No Preview";
       btn.style.color = "var(--red)";
       btn.style.borderColor = "rgba(224,82,82,.35)";
-      setTimeout(function () {
+      setTimeout(() => {
         btn.textContent = "Export Preview";
         btn.style.color = "";
         btn.style.borderColor = "";
@@ -45,10 +45,10 @@ function extractPreview(btn) {
     }
   };
 
-  xhr.onerror = function () {
+  xhr.onerror = () => {
     btn.textContent = "Failed";
     btn.style.color = "var(--red)";
-    setTimeout(function () {
+    setTimeout(() => {
       btn.textContent = "Export Preview";
       btn.style.color = "";
       btn.style.borderColor = "";
@@ -70,7 +70,7 @@ function repairJpeg(btn) {
   xhr.setRequestHeader("Content-Type", "application/json");
   xhr.responseType = "blob";
 
-  xhr.onload = function () {
+  xhr.onload = () => {
     if (xhr.status === 200) {
       var filename = xhr.getResponseHeader("X-Filename") || "repaired.jpg";
       var url = URL.createObjectURL(xhr.response);
@@ -85,23 +85,24 @@ function repairJpeg(btn) {
       btn.textContent = "Repaired!";
       btn.style.color = "var(--green)";
       btn.style.borderColor = "var(--green)";
-      setTimeout(function () {
+      setTimeout(() => {
         btn.textContent = "Repair JPG";
         btn.style.color = "";
         btn.style.borderColor = "";
         btn.disabled = false;
       }, 1500);
     } else {
-      xhr.response.text().then(function (text) {
+      xhr.response.text().then((text) => {
+        let msg;
         try {
-          var msg = JSON.parse(text).error;
+          msg = JSON.parse(text).error;
         } catch (e) {
-          var msg = "Repair failed";
+          msg = "Repair failed";
         }
         btn.textContent = msg.length > 30 ? "Repair Failed" : msg;
         btn.style.color = "var(--red)";
         btn.style.borderColor = "rgba(224,82,82,.35)";
-        setTimeout(function () {
+        setTimeout(() => {
           btn.textContent = "Repair JPG";
           btn.style.color = "";
           btn.style.borderColor = "";
@@ -111,10 +112,10 @@ function repairJpeg(btn) {
     }
   };
 
-  xhr.onerror = function () {
+  xhr.onerror = () => {
     btn.textContent = "Failed";
     btn.style.color = "var(--red)";
-    setTimeout(function () {
+    setTimeout(() => {
       btn.textContent = "Repair JPG";
       btn.style.color = "";
       btn.style.borderColor = "";
@@ -136,7 +137,7 @@ function salvageImage(btn) {
   xhr.setRequestHeader("Content-Type", "application/json");
   xhr.responseType = "blob";
 
-  xhr.onload = function () {
+  xhr.onload = () => {
     if (xhr.status === 200) {
       var filename = xhr.getResponseHeader("X-Filename") || "salvaged.jpg";
       var url = URL.createObjectURL(xhr.response);
@@ -151,23 +152,24 @@ function salvageImage(btn) {
       btn.textContent = "Salvaged!";
       btn.style.color = "#e6b43c";
       btn.style.borderColor = "#e6b43c";
-      setTimeout(function () {
+      setTimeout(() => {
         btn.textContent = "Salvage Image";
         btn.style.color = "";
         btn.style.borderColor = "";
         btn.disabled = false;
       }, 1500);
     } else {
-      xhr.response.text().then(function (text) {
+      xhr.response.text().then((text) => {
+        let msg;
         try {
-          var msg = JSON.parse(text).error;
+          msg = JSON.parse(text).error;
         } catch (e) {
-          var msg = "Salvage failed";
+          msg = "Salvage failed";
         }
         btn.textContent = msg.length > 30 ? "Salvage Failed" : msg;
         btn.style.color = "var(--red)";
         btn.style.borderColor = "rgba(224,82,82,.35)";
-        setTimeout(function () {
+        setTimeout(() => {
           btn.textContent = "Salvage Image";
           btn.style.color = "";
           btn.style.borderColor = "";
@@ -177,10 +179,10 @@ function salvageImage(btn) {
     }
   };
 
-  xhr.onerror = function () {
+  xhr.onerror = () => {
     btn.textContent = "Failed";
     btn.style.color = "var(--red)";
-    setTimeout(function () {
+    setTimeout(() => {
       btn.textContent = "Salvage Image";
       btn.style.color = "";
       btn.style.borderColor = "";
