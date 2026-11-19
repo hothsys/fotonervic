@@ -20,7 +20,7 @@ rawpy>=0.27.1  # optional
 pillow-heif>=1.8.1  # optional
 
 # AI quality model for Blur Check (falls back to basic scoring without it)
-onnxruntime>=1.17  # optional
+onnxruntime>=1.32.0  # optional
 
 # Runs ExifTool (exiftool.org) for Exif Info metadata. ExifTool itself isn't a
 # Python package: the app downloads it (see EXIFTOOL_MIN_VERSION in app.conf).
