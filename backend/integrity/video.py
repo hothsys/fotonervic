@@ -74,9 +74,8 @@ def check_mp4(filepath: str):
                     break
 
                 # Validate first atom looks like a real ISOBMFF atom
-                if atoms_checked == 0:
-                    if atom_type not in _KNOWN_ATOMS:
-                        return "corrupt", "No valid MP4/MOV container structure found"
+                if atoms_checked == 0 and atom_type not in _KNOWN_ATOMS:
+                    return "corrupt", "No valid MP4/MOV container structure found"
 
                 # Unknown atom after essential atoms found: trailing garbage,
                 # stop walking (cameras occasionally write junk after moov)
@@ -125,7 +124,7 @@ def check_mp4(filepath: str):
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"
 
 
 # ─── AVI checker (RIFF container) ───────────────────────────────────────────
@@ -195,7 +194,7 @@ def check_avi(filepath: str):
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"
 
 
 # ─── MPEG Program Stream checker ────────────────────────────────────────────
@@ -262,7 +261,7 @@ def check_mpeg(filepath: str):
     except PermissionError:
         return "error", "Permission denied reading file"
     except Exception as e:
-        return "error", f"Unexpected error: {str(e)}"
+        return "error", f"Unexpected error: {e!s}"
 
 
 # ─── Video dispatcher ────────────────────────────────────────────────────────

@@ -1,14 +1,15 @@
 """The Blur Check scan of a folder tree."""
 
+import contextlib
 import os
 import threading
 import time
 from pathlib import Path
 
-from backend.jobs import log_scan, run_in_threads
 from backend.blur.score import measure_blur
 from backend.formats import SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
+from backend.jobs import log_scan, run_in_threads
 
 BLUR_IMAGE_EXTS = SUPPORTED_EXTENSIONS - VIDEO_EXTS
 
@@ -51,10 +52,8 @@ def blur_scan_gen(root_dir: str, cancel: threading.Event):
     def _blur_worker(dp, fname):
         filepath = os.path.join(dp, fname)
         file_size = 0
-        try:
+        with contextlib.suppress(OSError):
             file_size = os.path.getsize(filepath)
-        except OSError:
-            pass
         # Integrity check too: a damaged file can still score as sharp, e.g. a
         # RAW whose embedded preview survived while its sensor data didn't
         blur = measure_blur(filepath)

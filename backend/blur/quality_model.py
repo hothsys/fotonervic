@@ -1,6 +1,7 @@
 """Optional AI quality model (CLIP-IQA+ via onnxruntime): loading, status,
 and in-app download."""
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -9,7 +10,7 @@ import subprocess
 import threading
 
 from backend.blur.calibration import QUALITY_INPUT_SIZE
-from backend.config import APP_DIR, WORKER_THREADS, _APP_CONFIG
+from backend.config import _APP_CONFIG, APP_DIR, WORKER_THREADS
 
 log = logging.getLogger(__name__)
 
@@ -197,10 +198,8 @@ def _download_quality_model():
         log.warning(
             f"AI quality model download failed: {_quality_download['error']} ({_quality_download['detail']})"
         )
-        try:
+        with contextlib.suppress(OSError):
             os.remove(part)
-        except OSError:
-            pass
 
 
 def start_quality_model_download():

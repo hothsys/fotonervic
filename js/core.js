@@ -31,7 +31,7 @@ async function checkLibs() {
       if (!d.pillow) missing.push("Pillow");
       if (!d.rawpy) missing.push("rawpy");
       if (!d.pillow_heif) missing.push("pillow-heif");
-      el.textContent = "\u26a0 missing: " + missing.join(", ");
+      el.textContent = `\u26a0 missing: ${missing.join(", ")}`;
       el.style.color = "var(--amber)";
     }
   } catch (e) {
@@ -97,15 +97,9 @@ function cancelActive() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatSize(bytes) {
   if (bytes === 0) return "0 B";
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / 1048576).toFixed(1) + " MB";
-}
-
-function formatEta(sec) {
-  if (sec < 60) return sec + "s";
-  if (sec < 3600) return Math.floor(sec / 60) + "m " + (sec % 60) + "s";
-  return Math.floor(sec / 3600) + "h " + Math.floor((sec % 3600) / 60) + "m";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
 function statusLabel(s) {
@@ -163,8 +157,8 @@ try {
 } catch (e) {}
 
 function thumbnailUrl(path) {
-  const v = THUMB_FORMAT_VERSION + (thumbCacheToken ? "." + thumbCacheToken : "");
-  return "/api/thumbnail?v=" + v + "&path=" + encodeURIComponent(path);
+  const v = THUMB_FORMAT_VERSION + (thumbCacheToken ? `.${thumbCacheToken}` : "");
+  return `/api/thumbnail?v=${v}&path=${encodeURIComponent(path)}`;
 }
 
 // ── Sticky scan bar: style it as a floating bar once it's pinned ──
@@ -195,7 +189,7 @@ async function clearCache() {
   btn.textContent = "Clearing\u2026";
   try {
     const r = await fetch("/api/clear-cache", { method: "POST" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     thumbCacheToken = String(Date.now());
     try {
       localStorage.setItem("thumbCacheToken", thumbCacheToken);

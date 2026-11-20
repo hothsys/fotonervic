@@ -19,6 +19,7 @@ mode), so Perl starts once per server run, not once per file.
 """
 
 import atexit
+import contextlib
 import hashlib
 import logging
 import os
@@ -29,7 +30,7 @@ import tarfile
 import threading
 import time
 
-from backend.config import APP_NAME, _APP_CONFIG
+from backend.config import _APP_CONFIG, APP_NAME
 
 log = logging.getLogger(__name__)
 
@@ -145,10 +146,8 @@ def _get_helper():
 def _stop_helper():
     global _helper, _helper_path
     if _helper is not None:
-        try:
+        with contextlib.suppress(Exception):
             _helper.terminate()
-        except Exception:
-            pass
     _helper, _helper_path = None, None
 
 
@@ -327,7 +326,7 @@ def _download_exiftool():
                         raise _DownloadError(
                             "The ExifTool download contained unexpected paths, so it was discarded.",
                             f"unsafe member: {member.name}",
-                        )
+                        ) from None
                 tar.extractall(staging)
         unpacked = os.path.join(staging, f"Image-ExifTool-{version}")
         if not os.path.isfile(os.path.join(unpacked, "exiftool")):
@@ -362,10 +361,8 @@ def _download_exiftool():
     finally:
         if _download["state"] == "error":
             log.warning(f"ExifTool download failed: {_download['error']} ({_download['detail']})")
-        try:
+        with contextlib.suppress(OSError):
             os.remove(archive)
-        except OSError:
-            pass
         shutil.rmtree(staging, ignore_errors=True)
 
 

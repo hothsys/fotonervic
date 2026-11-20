@@ -76,7 +76,7 @@ async function saveScan() {
     const dir = document.getElementById("dir-input").value.trim();
 
     const scanned =
-      parseInt(document.getElementById("s-scanned").textContent.replace(/,/g, "")) || 0;
+      parseInt(document.getElementById("s-scanned").textContent.replace(/,/g, ""), 10) || 0;
 
     const tx1 = db.transaction(DB_STORE, "readwrite");
     await idbReq(tx1.objectStore(DB_STORE).put({ ts, dir, folderData, scanned }, ts));
@@ -117,20 +117,24 @@ async function clearAllScans() {
     await idbReq(db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE).clear());
   } catch (e) {}
   document.getElementById("prev-scans-row").style.display = "none";
-  Object.keys(folderData).forEach((k) => delete folderData[k]);
+  Object.keys(folderData).forEach((k) => {
+    delete folderData[k];
+  });
   document.getElementById("folder-list").innerHTML = "";
   hideScanResults();
 }
 
 async function loadSelectedScan(sel) {
-  const ts = parseInt(sel.value);
+  const ts = parseInt(sel.value, 10);
   if (!ts) return;
   const saved = await loadScan(ts);
   if (!saved) {
     alert("Could not load this scan. It may have been cleared. Try rescanning.");
     return;
   }
-  Object.keys(folderData).forEach((k) => delete folderData[k]);
+  Object.keys(folderData).forEach((k) => {
+    delete folderData[k];
+  });
   document.getElementById("folder-list").innerHTML = "";
   hideScanResults();
   hideExifResults();
@@ -171,8 +175,8 @@ function populateScanDropdown(scans, selectTs) {
       const opt = document.createElement("option");
       opt.value = scan.ts;
       const parts = (scan.dir || "").split("/").filter(Boolean);
-      const short = parts.length > 2 ? "…/" + parts.slice(-2).join("/") : scan.dir || "";
-      opt.textContent = when(scan.ts) + (short ? " \u00b7 " + short : "");
+      const short = parts.length > 2 ? `…/${parts.slice(-2).join("/")}` : scan.dir || "";
+      opt.textContent = when(scan.ts) + (short ? ` \u00b7 ${short}` : "");
       opt.title = scan.dir || "";
       sel.appendChild(opt);
     });

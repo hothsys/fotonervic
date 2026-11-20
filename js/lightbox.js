@@ -20,8 +20,8 @@ let lbLoadToken = 0; // ignores loads that finish after moving to another photo
 let lbDrag = null; // { x, y, left, top, moved } while panning a zoomed photo
 
 function previewUrl(path, full) {
-  const v = PREVIEW_FORMAT_VERSION + (thumbCacheToken ? "." + thumbCacheToken : "");
-  return "/api/preview?v=" + v + (full ? "&full=1" : "") + "&path=" + encodeURIComponent(path);
+  const v = PREVIEW_FORMAT_VERSION + (thumbCacheToken ? `.${thumbCacheToken}` : "");
+  return `/api/preview?v=${v}${full ? "&full=1" : ""}&path=${encodeURIComponent(path)}`;
 }
 
 function lbPath(i) {
@@ -166,7 +166,7 @@ function unzoomLightbox() {
   const img = document.getElementById("lb-img");
 
   img.addEventListener("click", (e) => {
-    if (lbDrag && lbDrag.moved) return; // the end of a pan, not a click
+    if (lbDrag?.moved) return; // the end of a pan, not a click
     if (lbZoomed) unzoomLightbox();
     else if (!lbZoomable)
       return; // already at actual size

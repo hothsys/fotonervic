@@ -21,7 +21,7 @@ import platform
 import sys
 import threading
 
-from backend.config import APP_NAME, _APP_CONFIG
+from backend.config import _APP_CONFIG, APP_NAME
 
 LOG_FILE_MAX_BYTES = 5 * 1024 * 1024  # rotate at 5 MB...
 LOG_FILE_BACKUPS = 3  # ...keeping app.log.1 to app.log.3 (20 MB at most)

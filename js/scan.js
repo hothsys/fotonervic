@@ -23,7 +23,9 @@ function startScan() {
   }
 
   // Reset state
-  Object.keys(folderData).forEach((k) => delete folderData[k]);
+  Object.keys(folderData).forEach((k) => {
+    delete folderData[k];
+  });
   document.getElementById("folder-list").innerHTML = "";
   document.getElementById("s-total").textContent = "0";
   document.getElementById("s-exif").textContent = "0";
@@ -48,7 +50,7 @@ function startScan() {
   rememberScanDir(dir);
 
   if (eventSource) eventSource.close();
-  eventSource = new EventSource("/api/scan?dir=" + encodeURIComponent(dir));
+  eventSource = new EventSource(`/api/scan?dir=${encodeURIComponent(dir)}`);
 
   eventSource.onmessage = (e) => {
     const ev = JSON.parse(e.data);
@@ -68,12 +70,12 @@ function handleEvent(ev) {
 
     case "scanning": {
       const pct = ev.total > 0 ? ((ev.scanned / ev.total) * 100).toFixed(1) : 0;
-      document.getElementById("p-bar").style.width = pct + "%";
+      document.getElementById("p-bar").style.width = `${pct}%`;
       document.getElementById("p-scanned").textContent = ev.scanned.toLocaleString();
       document.getElementById("p-issues").textContent = ev.issues.toLocaleString();
-      document.getElementById("p-current").textContent = ev.dir + "  /  " + ev.file;
+      document.getElementById("p-current").textContent = `${ev.dir}  /  ${ev.file}`;
       if (ev.total > 0) {
-        document.getElementById("p-eta").textContent = pct + "% complete";
+        document.getElementById("p-eta").textContent = `${pct}% complete`;
       }
       break;
     }
@@ -84,7 +86,7 @@ function handleEvent(ev) {
       break;
 
     case "error":
-      alert("Scanner error: " + ev.message);
+      alert(`Scanner error: ${ev.message}`);
       scanDone();
       break;
 
@@ -115,17 +117,17 @@ function addIssue(ev) {
 }
 
 function upsertFolderGroup(dir) {
-  let group = document.getElementById("fg-" + CSS.escape(dir));
+  let group = document.getElementById(`fg-${CSS.escape(dir)}`);
   if (group) {
     // Update count badge
     const cnt = folderData[dir].total;
-    group.querySelector(".fc-issue").textContent = cnt + " issue" + (cnt !== 1 ? "s" : "");
+    group.querySelector(".fc-issue").textContent = `${cnt} issue${cnt !== 1 ? "s" : ""}`;
     return;
   }
 
   group = document.createElement("div");
   group.className = "folder-group open";
-  group.id = "fg-" + CSS.escape(dir);
+  group.id = `fg-${CSS.escape(dir)}`;
 
   group.innerHTML = `
     <div class="folder-header" onclick="toggleFolder(this.parentElement)">
@@ -155,14 +157,14 @@ function upsertFolderGroup(dir) {
 }
 
 function appendIssueRow(ev) {
-  const body = document.getElementById("fb-" + CSS.escape(ev.dir));
+  const body = document.getElementById(`fb-${CSS.escape(ev.dir)}`);
   if (!body) return;
 
   if (!matchesFilter(ev.status)) return;
 
   const size = ev.file_size > 0 ? formatSize(ev.file_size) : "0 B";
 
-  const pctStr = ev.corrupt_pct != null ? ev.corrupt_pct + "%" : "";
+  const pctStr = ev.corrupt_pct != null ? `${ev.corrupt_pct}%` : "";
   // Only when there's a preview to export (has_preview is missing from scans
   // saved before it existed, so those keep the button)
   const previewBtn =
@@ -262,7 +264,9 @@ function cancelScan() {
 // ── Filter ───────────────────────────────────────────────────────────────────
 function setFilter(btn, filter) {
   currentFilter = filter;
-  document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".filter-btn").forEach((b) => {
+    b.classList.remove("active");
+  });
   btn.classList.add("active");
   applyFilter();
 }
@@ -282,7 +286,7 @@ function applyFilter() {
 
     let fdir = null;
     for (const [k, v] of Object.entries(folderData)) {
-      if ("fg-" + CSS.escape(k) === group.id) {
+      if (`fg-${CSS.escape(k)}` === group.id) {
         fdir = k;
         break;
       }
@@ -294,7 +298,7 @@ function applyFilter() {
 
     visible.forEach((ev) => {
       const size = ev.file_size > 0 ? formatSize(ev.file_size) : "0 B";
-      const pctStr = ev.corrupt_pct != null ? ev.corrupt_pct + "%" : "";
+      const pctStr = ev.corrupt_pct != null ? `${ev.corrupt_pct}%` : "";
       const previewBtn =
         RAW_EXTS.has(ev.ext) && ev.has_preview !== false
           ? `<button class="export-preview-btn"${busyAttr()} data-extract-preview="${escHtml(ev.filepath)}">Export Preview</button>`
@@ -375,7 +379,7 @@ function exportData() {
   const csv =
     "﻿" +
     rows
-      .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(","))
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

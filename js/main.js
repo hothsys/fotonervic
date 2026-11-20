@@ -1,7 +1,7 @@
 // Click delegation for result rows and startup. Loaded last.
 
 // Event delegation for browse and reveal clicks (avoids inline onclick quoting issues)
-document.addEventListener("click", function (e) {
+document.addEventListener("click", (e) => {
   // Browse directory navigation
   var browseTarget = e.target.closest("[data-path]");
   if (
@@ -18,10 +18,10 @@ document.addEventListener("click", function (e) {
     e.preventDefault();
     e.stopPropagation();
     var text = copyTarget.getAttribute("data-copy");
-    navigator.clipboard.writeText(text).then(function () {
+    navigator.clipboard.writeText(text).then(() => {
       copyTarget.style.color = "var(--green)";
       copyTarget.style.borderColor = "var(--green)";
-      setTimeout(function () {
+      setTimeout(() => {
         copyTarget.style.color = "";
         copyTarget.style.borderColor = "";
       }, 1500);
@@ -70,7 +70,7 @@ document.addEventListener("click", function (e) {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-(async function () {
+(async () => {
   checkLibs();
   refreshQualityModelStatus(); // so the Blur Check panel is current when it appears
   refreshExiftoolStatus(); // likewise for the Exif Info panel

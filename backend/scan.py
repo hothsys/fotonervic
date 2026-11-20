@@ -1,14 +1,15 @@
 """Scan Directory (integrity scan of a folder tree) and the pre-scan media count."""
 
+import contextlib
 import os
 import re
 import threading
 import time
 from pathlib import Path
 
-from backend.jobs import log_scan, run_in_threads
 from backend.formats import RAW_EXTS, SUPPORTED_EXTENSIONS, VIDEO_EXTS
 from backend.integrity import check_integrity
+from backend.jobs import log_scan, run_in_threads
 from backend.tiff import _has_usable_preview
 
 scan_state = {
@@ -55,10 +56,8 @@ def scan_directory_gen(root_dir: str, cancel: threading.Event):
         """Run check_image in a worker thread."""
         filepath = os.path.join(dp, fname)
         file_size = 0
-        try:
+        with contextlib.suppress(OSError):
             file_size = os.path.getsize(filepath)
-        except OSError:
-            pass
         result = check_integrity(filepath)
         status, reason = result["integrity"], result["integrity_reason"]
         # For damaged RAW files, whether Export Preview has anything to export
@@ -141,7 +140,7 @@ def count_media_gen(root_dir: str, cancel: threading.Event):
 
     photos = videos = folders = 0
     start = last = time.time()
-    for dp, dirs, files in os.walk(root, followlinks=False):
+    for _dp, _dirs, files in os.walk(root, followlinks=False):
         if cancel.is_set():
             return
         folders += 1

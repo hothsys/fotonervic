@@ -482,7 +482,7 @@ class ScannerHandler(SimpleHTTPRequestHandler):
         if not preview:
             return self._send_json({"error": "No embedded preview found"}, 404)
 
-        pw, ph, p_off, p_len = preview
+        _pw, _ph, p_off, p_len = preview
 
         try:
             with open(filepath, "rb") as f:

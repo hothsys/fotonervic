@@ -56,13 +56,13 @@ function startDirCount() {
   // Numbers are wrapped in <strong> so they stand out; all other text is fixed
   const plural = (n, word) => `<strong>${n.toLocaleString()}</strong> ${word}${n !== 1 ? "s" : ""}`;
   const show = (html, cls) => {
-    el.className = "dir-count" + (cls ? " " + cls : "");
+    el.className = `dir-count${cls ? ` ${cls}` : ""}`;
     el.innerHTML = html;
     el.style.display = "block";
   };
   show("Counting\u2026", "counting");
 
-  const src = new EventSource("/api/count?dir=" + encodeURIComponent(dir));
+  const src = new EventSource(`/api/count?dir=${encodeURIComponent(dir)}`);
   dirCountSource = src;
   src.onmessage = (e) => {
     if (src !== dirCountSource) return; // a newer count has started
@@ -111,14 +111,14 @@ function renderBrowseData(d) {
   var parts = d.current.split("/").filter(Boolean);
   var accumulated = "";
   for (var i = 0; i < parts.length; i++) {
-    accumulated += "/" + parts[i];
+    accumulated += `/${parts[i]}`;
     var sep = document.createElement("span");
     sep.className = "browse-sep";
     sep.textContent = "/";
     bc.appendChild(sep);
 
     var crumb = document.createElement("span");
-    crumb.className = "browse-crumb" + (i === parts.length - 1 ? " current" : "");
+    crumb.className = `browse-crumb${i === parts.length - 1 ? " current" : ""}`;
     crumb.textContent = parts[i];
     if (i < parts.length - 1) {
       crumb.setAttribute("data-path", accumulated);
@@ -145,10 +145,10 @@ function renderBrowseData(d) {
   for (var j = 0; j < d.dirs.length; j++) {
     var item = document.createElement("div");
     item.className = "browse-item";
-    item.setAttribute("data-path", d.current + "/" + d.dirs[j]);
+    item.setAttribute("data-path", `${d.current}/${d.dirs[j]}`);
     var icon =
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
-    item.innerHTML = icon + "<span>" + escHtml(d.dirs[j]) + "</span>";
+    item.innerHTML = `${icon}<span>${escHtml(d.dirs[j])}</span>`;
     list.appendChild(item);
   }
 }
@@ -157,7 +157,7 @@ function fetchBrowse(url, retriesLeft) {
   var list = document.getElementById("browse-list");
   var xhr = new XMLHttpRequest();
   xhr.open("GET", url, true);
-  xhr.onload = function () {
+  xhr.onload = () => {
     if (xhr.status !== 200) {
       list.innerHTML =
         '<div class="browse-empty" style="color:var(--red)">Server error (' +
@@ -172,10 +172,10 @@ function fetchBrowse(url, retriesLeft) {
         '<div class="browse-empty" style="color:var(--red)">Invalid response from server</div>';
     }
   };
-  xhr.onerror = function () {
+  xhr.onerror = () => {
     if (retriesLeft > 0) {
       list.innerHTML = '<div class="browse-empty">Retrying\u2026</div>';
-      setTimeout(function () {
+      setTimeout(() => {
         fetchBrowse(url, retriesLeft - 1);
       }, 500);
     } else {
@@ -187,5 +187,5 @@ function fetchBrowse(url, retriesLeft) {
 }
 
 function browseTo(path) {
-  fetchBrowse("/api/browse?path=" + encodeURIComponent(path), 2);
+  fetchBrowse(`/api/browse?path=${encodeURIComponent(path)}`, 2);
 }

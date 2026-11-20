@@ -15,15 +15,15 @@ function watchMount(path) {
     return;
   }
 
-  mountSource = new EventSource("/api/mount-status?path=" + encodeURIComponent(path));
+  mountSource = new EventSource(`/api/mount-status?path=${encodeURIComponent(path)}`);
 
-  mountSource.onmessage = function (e) {
+  mountSource.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.exists) {
       el.className = "mount-status mounted";
       el.innerHTML = '<span class="dot"></span>Directory available and ready to scan';
       el.style.display = "flex";
-      setTimeout(function () {
+      setTimeout(() => {
         if (el.className.includes("mounted")) el.style.display = "none";
       }, 5000);
       // Keep SSE open; the drive may unmount while the page is open
@@ -34,7 +34,7 @@ function watchMount(path) {
     }
   };
 
-  mountSource.onerror = function () {
+  mountSource.onerror = () => {
     mountSource.close();
     mountSource = null;
     el.style.display = "none";
