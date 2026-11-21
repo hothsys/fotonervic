@@ -4,7 +4,7 @@ Foto Nerve Shatter is a local web app: a Python backend built on the standard li
 
 ## Stack
 
-- **Backend**: Python 3.10+, `http.server.ThreadingHTTPServer`, bound to `127.0.0.1` (port 5900 by default; `PORT` in `app.conf` or a command-line argument changes it).
+- **Backend**: Python 3.12+, `http.server.ThreadingHTTPServer`, bound to `127.0.0.1` (port 5900 by default; `PORT` in `app.conf` or a command-line argument changes it).
 - **Frontend**: plain HTML / CSS / JS, Josefin Sans + IBM Plex Mono fonts, dark theme.
 - **Imaging**: Pillow (JPEG/PNG/TIFF/WebP/BMP/GIF decode), rawpy/LibRaw (RAW), pillow-heif (HEIC/HEIF). Without rawpy or pillow-heif the app still runs; those formats get a structural check only or are reported as `Unsupported`.
 - **Blur Check**: numpy for the sharpness measures; onnxruntime (optional) for the AI quality model.
