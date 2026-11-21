@@ -89,7 +89,7 @@ Leave the window open while you use Foto Nerve Shatter, and press **Ctrl+C** in 
 
 ## Requirements
 
-- Python 3.10+ (macOS includes Perl and curl, which ExifTool's download uses)
+- Python 3.12+ (macOS includes Perl and curl, which ExifTool's download uses)
 
 Everything else is installed automatically into `.venv/` from [`requirements.txt`](requirements.txt), which Dependabot keeps current:
 
