@@ -1,4 +1,8 @@
-# <img src="logo.svg" width="100" valign="middle" hspace="10" vspace="4"/>Foto Nerve Shatter
+<p align="center">
+  <img src="logo.svg" width="220">
+</p>
+
+<h1 align="center">Foto Nerve Shatter</h1>
 
 *I hope you never have to use this. But if you do, I hope it helps.*
 
