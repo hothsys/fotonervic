@@ -4,7 +4,7 @@
 
 <h1 align="center">Foto Nerve Shatter</h1>
 
-*I hope you never have to use this. But if you do, I hope it helps.*
+<p align="center"><em>I hope you never have to use this. But if you do, I hope it helps.</em></p>
 
 This web app recursively scans directories for corrupt, truncated, or damaged image and video files. For images, it attempts recovery where possible. Also extracts EXIF metadata with thumbnail previews across an entire directory.
 
