@@ -14,7 +14,7 @@ Click **Exif Info** to scan every image and video in a directory for metadata. R
 - **Export note**: when a photo has no camera metadata at all but was written by an editor, the card says so instead of showing nothing, e.g. *Camera metadata removed on export (Lightroom or Photoshop)*: Lightroom's Export dialog can strip metadata (Metadata › Include: Copyright Only), leaving only Adobe's XMP signature. The editor's name is shown when the file still records it (`CreatorTool` / `Software`, e.g. *Adobe Photoshop Lightroom Classic*). Re-export with *All Metadata*, or scan the originals. Photos with no camera make or model and no editor signature say *No camera details in this file* (in grey): typical of photos saved from messaging or social apps, which remove camera details when sharing, and of screenshots and scans. Each note has an ⓘ bubble: click it (or press Enter on it) for a pop-out explaining the possible reasons, plus, for small copies, a remark that the size points to a shared or downloaded copy. RAW files and videos get no note. The CSV has a *Metadata Note* column.
 - **Damaged tag**: a red **Damaged** tag when the integrity check finds a problem (see below); hover for the exact problem.
 
-Clicking a photo's thumbnail opens it in the lightbox (full screen, arrow keys to step through, click to zoom to 100%; see [Lightbox Preview](../README.md#lightbox-preview)). Clicking a filename, or a video's thumbnail, reveals the file in Finder / Explorer.
+Clicking a photo's thumbnail opens it in the lightbox (full screen, arrow keys to step through, click to zoom to 100%; see [Lightbox Preview](lightbox.md)). Clicking a filename, or a video's thumbnail, reveals the file in Finder / Explorer.
 
 ## Supported inputs
 
@@ -47,3 +47,21 @@ The check decompresses every file, including RAW sensor data, so it's the slowes
 Exif Info results can be exported to CSV from the UI (built in the browser by `js/exif.js`), the same way Scan Directory results are.
 
 Endpoints: `GET /api/exif-scan?dir=` (SSE stream), `GET /api/thumbnail?path=` (per-card image), `GET /api/preview?path=[&full=1]` (lightbox), `POST /api/exif-cancel` (stop), `GET /api/exiftool` (ExifTool status) and `POST /api/exiftool/download` (download or update it).
+
+## Using Exif Info
+
+Click **Exif Info** to scan every image and video in a directory for metadata. Results appear as a card grid grouped by folder. Each card shows:
+
+- Thumbnail (lazy-loaded as you scroll, so it handles 10k+ files efficiently)
+- Camera make and model, and the lens
+- Capture time (when the photo was taken)
+- Exposure settings (aperture, shutter speed, ISO, focal length)
+- Image dimensions and file size
+- GPS coordinates (clickable link to Google Maps, when available)
+- A note when camera details are missing, instead of an empty card: removed on export by an editor (e.g. Lightroom's *Include: Copyright Only*), or simply not in the file (e.g. photos saved from messaging apps, screenshots)
+
+Supports JPEG, PNG, HEIC, TIFF, WebP, and every supported RAW format (NEF, ARW, CR2, CR3, DNG, RAF, RW2, ORF, PEF, SRW, and more). Videos show a placeholder icon. Click a photo's thumbnail to preview it in the lightbox (see [Lightbox preview](lightbox.md)); click a filename, or a video's thumbnail, to reveal the file in Finder / Explorer.
+
+Each file also gets the same integrity check as Scan Directory: damaged files get a red **Damaged** tag (hover for the exact problem), are counted in the summary, and the CSV export includes Integrity columns. The check decompresses every file, including RAW sensor data, so it's the slowest part of Exif Info on RAW-heavy folders; RAW files are checked four at a time in separate processes (e.g. 20 iPhone 17 Pro ProRAW DNGs: about 8 seconds; 40 Nikon D810 NEFs: about 5).
+
+**ExifTool:** metadata is read by [ExifTool](https://exiftool.org), which knows practically every camera's files, including lens names hidden in maker notes, and is updated for new cameras every few weeks. The app keeps its own copy (about 8 MB, checksum-verified, in `~/Library/Caches/FotoNerveShatter/exiftool`, outside the project): it's downloaded at launch whenever it's missing or older than `EXIFTOOL_MIN_VERSION` in `app.conf`, and the panel above the results offers an **Update** when exiftool.org has a newer release. No Homebrew or PATH setup is needed; an `exiftool` you installed yourself is used only until the app's copy is in place. With ExifTool, videos also show their camera, capture time, and GPS. Until it's available, a basic built-in reader shows the common fields for JPEG, HEIC, and some RAW files.
